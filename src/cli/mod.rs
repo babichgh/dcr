@@ -7,3 +7,4 @@ pub mod help;
 pub mod init;
 pub mod new;
 pub mod run;
+pub mod test;

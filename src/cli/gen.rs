@@ -801,7 +801,6 @@ fn build_compile_command(info: &ProjectInfo, source: &str, profile: &str) -> Vec
         "release" => {
             cmd.push("-O3".to_string());
             cmd.push("-DNDEBUG".to_string());
-            cmd.push("-march=native".to_string());
         }
         "debug" => {
             cmd.push("-O0".to_string());
@@ -922,7 +921,8 @@ fn gen_vscode(args: &[String]) -> i32 {
 fn gen_extensions_json() -> String {
     r#"{
   "recommendations": [
-    "llvm-vs-code-extensions.vscode-clangd"
+    "llvm-vs-code-extensions.vscode-clangd",
+    "vadimcn.vscode-lldb"
   ],
   "unwantedRecommendations": [
     "ms-vscode.cpptools",
@@ -1025,15 +1025,13 @@ fn gen_launch_json(projects: &[ProjectInfo], _root: &Path) -> String {
         let debug_entry = format!(
             r#"    {{
       "name": {name},
-      "type": "cppdbg",
+      "type": "lldb",
       "request": "launch",
       "program": {prog},
       "args": [],
-      "stopAtEntry": false,
+      "stopOnEntry": false,
       "cwd": {cwd},
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "gdb",
+      "terminal": "integrated",
       "preLaunchTask": "dcr: build (debug)"
     }}"#,
             name = json_str(&format!("{} (debug)", info.name)),
@@ -1044,15 +1042,13 @@ fn gen_launch_json(projects: &[ProjectInfo], _root: &Path) -> String {
         let release_entry = format!(
             r#"    {{
       "name": {name},
-      "type": "cppdbg",
+      "type": "lldb",
       "request": "launch",
       "program": {prog},
       "args": [],
-      "stopAtEntry": false,
+      "stopOnEntry": false,
       "cwd": {cwd},
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "gdb",
+      "terminal": "integrated",
       "preLaunchTask": "dcr: build (release)"
     }}"#,
             name = json_str(&format!("{} (release)", info.name)),
@@ -1069,7 +1065,7 @@ fn gen_launch_json(projects: &[ProjectInfo], _root: &Path) -> String {
         configs.push(
             r#"    {
       "name": "(placeholder — no binary targets found)",
-      "type": "cppdbg",
+      "type": "lldb",
       "request": "launch",
       "program": "",
       "cwd": "${workspaceFolder}"

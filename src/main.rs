@@ -20,6 +20,7 @@ fn main() {
         "init" => cli::init::init(rest),
         "build" => cli::build::build(rest),
         "run" => cli::run::run(rest),
+        "test" | "tests" => cli::test::test(rest),
         "clean" => cli::clean::clean(rest),
         "gen" => cli::r#gen::r#gen(rest),
         "--version" => {

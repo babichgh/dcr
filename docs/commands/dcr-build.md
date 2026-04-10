@@ -57,6 +57,7 @@ dcr build --debug --clean
 - Incremental rebuild checks source/object mtime and tracked header dependencies.
 - `--force` skips build cache checks and recompiles.
 - `--clean` removes `target/<profile>` and `build.clean` paths before building.
+- Default GCC/Clang profile flags: `debug` -> `-O0 -g -Wall -Wextra -fno-omit-frame-pointer -DDCR_DEBUG`, `release` -> `-O3 -DNDEBUG`.
 - For `language = "asm"` with `compiler = "as"`/`"gas"`, use `.s` files (no preprocessing). For `.S`, use `gcc` or `clang`.
 - In workspace root, `dcr build` builds all members in dependency order.
 - `build.exclude` removes paths from source/header collection; `build.include` re-allows matching paths and has priority over `exclude`.

@@ -12,6 +12,7 @@ pub fn help() -> i32 {
     println!("    init              Initialize the current directory as a project");
     println!("    build [--profile] Build the project (default: --debug)");
     println!("    run [--profile]   Build and run the project (default: --debug)");
+    println!("    test              Run project tests (alias: tests)");
     println!("    clean             Remove the target directory");
     println!("    gen <subcommand>  Generate IDE integration files");
     printc("FLAGS:", BOLD_GREEN);

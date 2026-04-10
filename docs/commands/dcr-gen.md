@@ -89,6 +89,7 @@ Usage in VSCode:
 - Open the Command Palette (`Ctrl+Shift+P`) and select **"Debug: Start Debugging"** to run debugger
 - Press `Ctrl+Shift+B` to run the build task
 - Clangd will provide IntelliSense and diagnostics based on `compile_commands.json`
+- Generated `launch.json` uses CodeLLDB (`type: "lldb"`), so install `vadimcn.vscode-lldb`
 
 ### `dcr gen clion`
 
@@ -152,6 +153,7 @@ When running `dcr gen` in a workspace root, all commands process both the root p
 - Verify binary paths in `launch.json` match actual build output (`target/<profile>/binary-name`)
 - For workspace projects, each member's debug config uses its own `target/` directory
 - Ensure GDB/LLDB is installed: `gdb --version` or `lldb --version`
+- If VSCode reports unsupported debugger type, install the extension that matches `launch.json` type (`vadimcn.vscode-lldb` for `lldb`)
 
 ### CLion not recognizing includes
 

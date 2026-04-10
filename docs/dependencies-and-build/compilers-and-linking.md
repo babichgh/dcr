@@ -28,7 +28,7 @@ These flags are applied automatically based on profile and compiler backend.
 GCC/Clang:
 
 - `debug`: `-O0 -g -Wall -Wextra -fno-omit-frame-pointer -DDCR_DEBUG`
-- `release`: `-O3 -DNDEBUG -march=native`
+- `release`: `-O3 -DNDEBUG`
 
 MSVC:
 

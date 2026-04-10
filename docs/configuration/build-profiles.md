@@ -21,7 +21,7 @@ You can also add `--force` or `--clean` to `build`/`run`.
 ### GCC/Clang-like toolchains
 
 - `debug`: `-O0 -g -Wall -Wextra -fno-omit-frame-pointer -DDCR_DEBUG`
-- `release`: `-O3 -DNDEBUG -march=native`
+- `release`: `-O3 -DNDEBUG`
 
 ### MSVC toolchain
 
@@ -40,7 +40,7 @@ Default compiler flags:
 GCC/Clang:
 
 - `debug`: `-O0 -g -Wall -Wextra -fno-omit-frame-pointer -DDCR_DEBUG`
-- `release`: `-O3 -DNDEBUG -march=native`
+- `release`: `-O3 -DNDEBUG`
 
 MSVC:
 

@@ -112,7 +112,7 @@ fn source_extensions(language: &str) -> Vec<&str> {
 
 fn default_flags(profile: &str) -> &'static [&'static str] {
     match profile {
-        "release" => &["-O3", "-DNDEBUG", "-march=native"],
+        "release" => &["-O3", "-DNDEBUG"],
         "debug" => &[
             "-O0",
             "-g",
@@ -156,9 +156,6 @@ fn build_objects(
                 cmd.arg(format!("-std={}", ctx.standard));
             }
             for flag in default_flags(ctx.profile) {
-                if ctx.platform.is_some() && *flag == "-march=native" {
-                    continue;
-                }
                 cmd.arg(flag);
             }
             for flag in ctx.cflags {
