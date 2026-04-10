@@ -2,7 +2,7 @@ use crate::config::FILE_MAIN_C;
 use crate::core::config::Config;
 use crate::utils::fs::check_dir;
 use crate::utils::log::{error, warn};
-use crate::utils::text::{colored, printc, BOLD_CYAN, BOLD_GREEN};
+use crate::utils::text::{BOLD_CYAN, BOLD_GREEN, colored, printc};
 use std::fs;
 use std::io::Write;
 use toml::Value;

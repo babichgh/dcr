@@ -80,8 +80,14 @@ fn run_testsuite() -> Result<i32, String> {
     }
 
     let config = Config::open("./dcr.toml").map_err(|_| "Failed to read dcr.toml".to_string())?;
-    let name = config.get("package.name").and_then(|v| v.as_str()).ok_or("package.name not found in dcr.toml")?;
-    let kind = config.get("package.kind").and_then(|v| v.as_str()).unwrap_or("bin");
+    let name = config
+        .get("package.name")
+        .and_then(|v| v.as_str())
+        .ok_or("package.name not found in dcr.toml")?;
+    let kind = config
+        .get("package.kind")
+        .and_then(|v| v.as_str())
+        .unwrap_or("bin");
 
     let compiler = env::var("DCR_CC").unwrap_or_else(|_| "cc".to_string());
     let profile = "release";
@@ -108,7 +114,10 @@ fn run_testsuite() -> Result<i32, String> {
     // Link
     let bin_path = format!("./tests/test{}", std::env::consts::EXE_SUFFIX);
     let link_cmd = if kind == "lib" {
-        format!("{} {} -o {} -Ltarget/release -l{}", compiler, obj_path, bin_path, name)
+        format!(
+            "{} {} -o {} -Ltarget/release -l{}",
+            compiler, obj_path, bin_path, name
+        )
     } else {
         format!("{} {} -o {}", compiler, obj_path, bin_path)
     };
