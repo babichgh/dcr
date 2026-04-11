@@ -1401,7 +1401,10 @@ fn normalize_target_os(s: &str) -> &str {
         "windows" => "x86_64-pc-windows-msvc",
         _ if s.contains('-') => s, // Assume valid triple
         _ => {
-            warn(&format!("Unknown target '{}', using as-is. Supported short names: linux, macos, windows", s));
+            warn(&format!(
+                "Unknown target '{}', using as-is. Supported short names: linux, macos, windows",
+                s
+            ));
             s
         }
     }

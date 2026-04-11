@@ -1,4 +1,4 @@
-use crate::config::{flags, PROFILE};
+use crate::config::{PROFILE, flags};
 use crate::utils::log::warn;
 
 pub struct BuildRunFlags {

@@ -4,7 +4,7 @@ use crate::core::config::Config;
 use crate::core::runner::run_binary;
 use crate::utils::fs::find_project_root;
 use crate::utils::log::error;
-use crate::utils::text::{colored, BOLD_GREEN};
+use crate::utils::text::{BOLD_GREEN, colored};
 use std::path::Path;
 use std::process::Command;
 

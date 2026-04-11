@@ -75,7 +75,12 @@ fn parse_clean_flags(args: &[String]) -> Result<CleanFlags, String> {
 fn clean_from_root(root: &Path, flags: &CleanFlags) -> Result<(), String> {
     let config = Config::open("./dcr.toml").map_err(|err| err.to_string())?;
     if flags.all
-        && let Some(workspace) = parse_workspace(&config, flags.profile.as_deref().unwrap_or("debug"), None, root)?
+        && let Some(workspace) = parse_workspace(
+            &config,
+            flags.profile.as_deref().unwrap_or("debug"),
+            None,
+            root,
+        )?
     {
         for member in &workspace.members {
             clean_project_at(&member.path, flags.profile.as_deref())?;

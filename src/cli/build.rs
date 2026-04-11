@@ -126,11 +126,33 @@ fn profile_table<'a>(config: &'a Config, profile: &str) -> Option<&'a toml::valu
         .and_then(|v| v.as_table())
 }
 
-fn get_config_value_raw(config: &Config, section: &str, field: &str, profile: &str, target: Option<&str>) -> Option<toml::Value> {
+fn get_config_value_raw(
+    config: &Config,
+    section: &str,
+    field: &str,
+    profile: &str,
+    target: Option<&str>,
+) -> Option<toml::Value> {
     // Order: target.profile, profile.target, target, profile, base
     let keys = [
-        target.map(|t| format!("{}.{}.{}.{}", section, normalize_target_os(t), profile, field)),
-        target.map(|t| format!("{}.{}.{}.{}", section, profile, normalize_target_os(t), field)),
+        target.map(|t| {
+            format!(
+                "{}.{}.{}.{}",
+                section,
+                normalize_target_os(t),
+                profile,
+                field
+            )
+        }),
+        target.map(|t| {
+            format!(
+                "{}.{}.{}.{}",
+                section,
+                profile,
+                normalize_target_os(t),
+                field
+            )
+        }),
         target.map(|t| format!("{}.{}.{}", section, normalize_target_os(t), field)),
         Some(format!("{}.{}.{}", section, profile, field)),
         Some(format!("{}.{}", section, field)),
@@ -144,16 +166,32 @@ fn get_config_value_raw(config: &Config, section: &str, field: &str, profile: &s
 }
 
 fn get_inherit(config: &Config, section: &str, profile: &str, target: Option<&str>) -> bool {
-    get_config_value_raw(config, section, "inherit", profile, target).and_then(|v| v.as_bool()).unwrap_or(true)
+    get_config_value_raw(config, section, "inherit", profile, target)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
 }
 
-fn get_config_value(config: &Config, section: &str, field: &str, profile: &str, target: Option<&str>) -> Option<String> {
-    get_config_value_raw(config, section, field, profile, target).and_then(|v| v.as_str().map(|s| s.trim().to_string())).filter(|s| !s.is_empty())
+fn get_config_value(
+    config: &Config,
+    section: &str,
+    field: &str,
+    profile: &str,
+    target: Option<&str>,
+) -> Option<String> {
+    get_config_value_raw(config, section, field, profile, target)
+        .and_then(|v| v.as_str().map(|s| s.trim().to_string()))
+        .filter(|s| !s.is_empty())
 }
 
-fn get_string_with_profile_and_target(config: &Config, field: &str, profile: &str, target: Option<&str>) -> String {
+fn get_string_with_profile_and_target(
+    config: &Config,
+    field: &str,
+    profile: &str,
+    target: Option<&str>,
+) -> String {
     if get_inherit(config, "build", profile, target) {
-        get_config_value(config, "build", field, profile, target).unwrap_or_else(|| get_config_str(config, &format!("build.{field}")))
+        get_config_value(config, "build", field, profile, target)
+            .unwrap_or_else(|| get_config_str(config, &format!("build.{field}")))
     } else {
         get_config_value(config, "build", field, profile, target).unwrap_or_default()
     }
@@ -212,7 +250,8 @@ fn get_list_with_profile_and_target(
             if let Some(table) = profile_table(config, normalized_t)
                 && let Some(value) = table.get(field)
             {
-                let mut extra = parse_string_array(value, &format!("build.{normalized_t}.{field}"))?;
+                let mut extra =
+                    parse_string_array(value, &format!("build.{normalized_t}.{field}"))?;
                 out.append(&mut extra);
             }
         }
@@ -224,15 +263,22 @@ fn get_list_with_profile_and_target(
 mod tests {
     #[test]
     fn test_normalize_target_os() {
-        assert_eq!(super::normalize_target_os("linux"), "x86_64-unknown-linux-gnu");
+        assert_eq!(
+            super::normalize_target_os("linux"),
+            "x86_64-unknown-linux-gnu"
+        );
         assert_eq!(super::normalize_target_os("macos"), "x86_64-apple-darwin");
-        assert_eq!(super::normalize_target_os("windows"), "x86_64-pc-windows-msvc");
-        assert_eq!(super::normalize_target_os("x86_64-unknown-linux-gnu"), "x86_64-unknown-linux-gnu");
+        assert_eq!(
+            super::normalize_target_os("windows"),
+            "x86_64-pc-windows-msvc"
+        );
+        assert_eq!(
+            super::normalize_target_os("x86_64-unknown-linux-gnu"),
+            "x86_64-unknown-linux-gnu"
+        );
         assert_eq!(super::normalize_target_os("unknown"), "unknown");
     }
 }
-
-
 
 fn get_list_with_profile(
     config: &Config,
@@ -381,7 +427,12 @@ fn run_build(ctx: &BuildContext) -> Result<f64, String> {
 }
 
 #[allow(unused_variables)]
-fn build_from_root(root: &Path, profile: &str, target: Option<&str>, force: bool) -> Result<(), String> {
+fn build_from_root(
+    root: &Path,
+    profile: &str,
+    target: Option<&str>,
+    force: bool,
+) -> Result<(), String> {
     let config = Config::open("./dcr.toml").map_err(|err| err.to_string())?;
     let project_name = get_config_str(&config, "package.name");
     let project_version = get_config_str(&config, "package.version");
@@ -393,7 +444,10 @@ fn build_from_root(root: &Path, profile: &str, target: Option<&str>, force: bool
         if config_targets.is_empty() {
             vec![None]
         } else {
-            config_targets.into_iter().map(|t| Some(normalize_target_os(&t).to_string())).collect()
+            config_targets
+                .into_iter()
+                .map(|t| Some(normalize_target_os(&t).to_string()))
+                .collect()
         }
     };
 
@@ -411,7 +465,10 @@ fn build_from_root(root: &Path, profile: &str, target: Option<&str>, force: bool
                 "    Building project `{}`\n    Profile: {}\n    Target: {}",
                 colored(&project_name, BOLD_GREEN),
                 colored(profile, BOLD_GREEN),
-                colored(build_target.as_ref().map_or("native", |t| t.as_str()), BOLD_GREEN)
+                colored(
+                    build_target.as_ref().map_or("native", |t| t.as_str()),
+                    BOLD_GREEN
+                )
             );
         }
         if let Some(workspace) = parse_workspace(&config, profile, build_target.as_deref(), root)? {
@@ -458,31 +515,54 @@ fn build_project_at(
         }
         let config = Config::open("./dcr.toml").map_err(|err| err.to_string())?;
         let project_name = get_config_str(&config, "package.name");
-    let project_version = get_config_str(&config, "package.version");
+        let project_version = get_config_str(&config, "package.version");
         let build_target_config = get_string_with_profile(&config, "target", profile);
-        let build_target = target.or(if build_target_config.is_empty() { None } else { Some(build_target_config.as_str()) });
-        let project_compiler = get_string_with_profile_and_target(&config, "compiler", profile, build_target);
+        let build_target = target.or(if build_target_config.is_empty() {
+            None
+        } else {
+            Some(build_target_config.as_str())
+        });
+        let project_compiler =
+            get_string_with_profile_and_target(&config, "compiler", profile, build_target);
         let build_language = get_language_with_profile(&config, profile)?;
-        let build_standard = get_string_with_profile_and_target(&config, "standard", profile, build_target);
+        let build_standard =
+            get_string_with_profile_and_target(&config, "standard", profile, build_target);
         let build_kind = get_string_with_profile_and_target(&config, "kind", profile, build_target);
-        let build_platform = get_string_with_profile_and_target(&config, "platform", profile, build_target);
-        let tc_cc = get_config_value(&config, "toolchain", "cc", profile, build_target).or_else(|| get_config_opt(&config, "toolchain.cc"));
-        let tc_cxx = get_config_value(&config, "toolchain", "cxx", profile, build_target).or_else(|| get_config_opt(&config, "toolchain.cxx"));
-        let tc_as = get_config_value(&config, "toolchain", "as", profile, build_target).or_else(|| get_config_opt(&config, "toolchain.as"));
-        let tc_ar = get_config_value(&config, "toolchain", "ar", profile, build_target).or_else(|| get_config_opt(&config, "toolchain.ar"));
-        let tc_ld = get_config_value(&config, "toolchain", "ld", profile, build_target).or_else(|| get_config_opt(&config, "toolchain.ld"));
-        let tc_uic = get_config_value(&config, "toolchain", "uic", profile, build_target).or_else(|| get_config_opt(&config, "toolchain.uic"));
-        let tc_moc = get_config_value(&config, "toolchain", "moc", profile, build_target).or_else(|| get_config_opt(&config, "toolchain.moc"));
-        let tc_rcc = get_config_value(&config, "toolchain", "rcc", profile, build_target).or_else(|| get_config_opt(&config, "toolchain.rcc"));
-        let build_cflags = get_list_with_profile_and_target(&config, "cflags", profile, build_target)?;
-        let build_ldflags = get_list_with_profile_and_target(&config, "ldflags", profile, build_target)?;
-        let build_excludes = get_list_with_profile_and_target(&config, "exclude", profile, build_target)?;
-        let build_includes = get_list_with_profile_and_target(&config, "include", profile, build_target)?;
-        let build_roots = get_list_with_profile_and_target(&config, "roots", profile, build_target)?;
+        let build_platform =
+            get_string_with_profile_and_target(&config, "platform", profile, build_target);
+        let tc_cc = get_config_value(&config, "toolchain", "cc", profile, build_target)
+            .or_else(|| get_config_opt(&config, "toolchain.cc"));
+        let tc_cxx = get_config_value(&config, "toolchain", "cxx", profile, build_target)
+            .or_else(|| get_config_opt(&config, "toolchain.cxx"));
+        let tc_as = get_config_value(&config, "toolchain", "as", profile, build_target)
+            .or_else(|| get_config_opt(&config, "toolchain.as"));
+        let tc_ar = get_config_value(&config, "toolchain", "ar", profile, build_target)
+            .or_else(|| get_config_opt(&config, "toolchain.ar"));
+        let tc_ld = get_config_value(&config, "toolchain", "ld", profile, build_target)
+            .or_else(|| get_config_opt(&config, "toolchain.ld"));
+        let tc_uic = get_config_value(&config, "toolchain", "uic", profile, build_target)
+            .or_else(|| get_config_opt(&config, "toolchain.uic"));
+        let tc_moc = get_config_value(&config, "toolchain", "moc", profile, build_target)
+            .or_else(|| get_config_opt(&config, "toolchain.moc"));
+        let tc_rcc = get_config_value(&config, "toolchain", "rcc", profile, build_target)
+            .or_else(|| get_config_opt(&config, "toolchain.rcc"));
+        let build_cflags =
+            get_list_with_profile_and_target(&config, "cflags", profile, build_target)?;
+        let build_ldflags =
+            get_list_with_profile_and_target(&config, "ldflags", profile, build_target)?;
+        let build_excludes =
+            get_list_with_profile_and_target(&config, "exclude", profile, build_target)?;
+        let build_includes =
+            get_list_with_profile_and_target(&config, "include", profile, build_target)?;
+        let build_roots =
+            get_list_with_profile_and_target(&config, "roots", profile, build_target)?;
         let src_disable = get_bool_with_profile(&config, "src_disable", profile, false);
-        let build_expects = get_list_with_profile_and_target(&config, "expect", profile, build_target)?;
-        let pkg_configs = get_list_with_profile_and_target(&config, "pkg_config", profile, build_target)?;
-        let build_generated = get_list_with_profile_and_target(&config, "generated", profile, build_target)?;
+        let build_expects =
+            get_list_with_profile_and_target(&config, "expect", profile, build_target)?;
+        let pkg_configs =
+            get_list_with_profile_and_target(&config, "pkg_config", profile, build_target)?;
+        let build_generated =
+            get_list_with_profile_and_target(&config, "generated", profile, build_target)?;
         let build_steps = get_build_steps_with_profile(&config, "steps", profile)?;
         let build_post_steps = get_build_steps_with_profile(&config, "post_steps", profile)?;
 
@@ -667,7 +747,10 @@ pub fn normalize_target_os(target: &str) -> &str {
         "windows" => "x86_64-pc-windows-msvc",
         _ if target.contains('-') => target, // Assume valid triple
         _ => {
-            warn(&format!("Unknown target '{}', using as-is. Supported short names: linux, macos, windows", target));
+            warn(&format!(
+                "Unknown target '{}', using as-is. Supported short names: linux, macos, windows",
+                target
+            ));
             target
         }
     }
