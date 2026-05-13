@@ -146,25 +146,27 @@ fn build_objects(
 
     std::thread::scope(|s| {
         for _ in 0..num_threads {
-            s.spawn(|| loop {
-                if err_msg.lock().unwrap().is_some() {
-                    break;
-                }
-
-                let i = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                if i >= sources.len() {
-                    break;
-                }
-
-                let source = &sources[i];
-                let obj_path = &objects[i];
-
-                if let Err(e) = build_object(compiler, source, obj_path, ctx) {
-                    let mut err = err_msg.lock().unwrap();
-                    if err.is_none() {
-                        *err = Some(e);
+            s.spawn(|| {
+                loop {
+                    if err_msg.lock().unwrap().is_some() {
+                        break;
                     }
-                    break;
+
+                    let i = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if i >= sources.len() {
+                        break;
+                    }
+
+                    let source = &sources[i];
+                    let obj_path = &objects[i];
+
+                    if let Err(e) = build_object(compiler, source, obj_path, ctx) {
+                        let mut err = err_msg.lock().unwrap();
+                        if err.is_none() {
+                            *err = Some(e);
+                        }
+                        break;
+                    }
                 }
             });
         }
