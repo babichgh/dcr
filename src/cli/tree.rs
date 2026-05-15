@@ -36,7 +36,12 @@ pub fn tree(_args: &[String]) -> i32 {
     0
 }
 
-fn print_deps(deps: &toml::value::Table, base_path: &Path, prefix: &str, seen: &mut HashSet<String>) {
+fn print_deps(
+    deps: &toml::value::Table,
+    base_path: &Path,
+    prefix: &str,
+    seen: &mut HashSet<String>,
+) {
     let mut dep_list: Vec<_> = deps.iter().collect();
     dep_list.sort_by_key(|(name, _)| *name);
 
@@ -57,7 +62,10 @@ fn print_deps(deps: &toml::value::Table, base_path: &Path, prefix: &str, seen: &
                     if let Some(v) = config.get("package.version").and_then(|v| v.as_str()) {
                         version = format!(" v{}", v);
                     }
-                    sub_deps = config.get("dependencies").and_then(|v| v.as_table()).cloned();
+                    sub_deps = config
+                        .get("dependencies")
+                        .and_then(|v| v.as_table())
+                        .cloned();
                     resolved_path = Some(path.clone());
                 }
             }
