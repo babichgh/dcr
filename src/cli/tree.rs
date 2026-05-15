@@ -57,7 +57,9 @@ fn print_deps(
 
         if let Some(path) = &dep_path {
             let dcr_toml = path.join("dcr.toml");
-            if dcr_toml.exists() && let Ok(config) = Config::open(&dcr_toml.to_string_lossy()) {
+            if dcr_toml.exists()
+                && let Ok(config) = Config::open(&dcr_toml.to_string_lossy())
+            {
                 if let Some(v) = config.get("package.version").and_then(|v| v.as_str()) {
                     version = format!(" v{}", v);
                 }
@@ -89,7 +91,9 @@ fn print_deps(
 
         println!("{}{}{}{}", prefix, connector, name, version);
 
-        if let Some(s_deps) = sub_deps && !seen.contains(*name) {
+        if let Some(s_deps) = sub_deps
+            && !seen.contains(*name)
+        {
             seen.insert(name.to_string());
             let new_prefix = format!("{}{}", prefix, child_prefix);
             if let Some(path) = resolved_path {
