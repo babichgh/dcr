@@ -15,6 +15,8 @@ permissions:
 
 jobs:
   publish-aur:
+    # Не публикуем dev/pre-release теги в AUR
+    if: "!contains(github.ref_name, '-')"
     runs-on: ubuntu-latest
     environment: aur
     steps:
