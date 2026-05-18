@@ -1,19 +1,34 @@
 $ErrorActionPreference = 'Stop'
 
-$RepoUrl = 'https://github.com/dexoron/dcr'
-$ApiUrl = 'https://api.github.com/repos/dexoron/dcr/releases/latest'
+$RepoUrl    = 'https://github.com/dexoron/dcr'
+$ApiLatest  = 'https://api.github.com/repos/dexoron/dcr/releases/latest'
+$ApiAll     = 'https://api.github.com/repos/dexoron/dcr/releases'
 $InstallPath = Join-Path $env:LOCALAPPDATA 'dcr'
-$BinPath = Join-Path $env:USERPROFILE '.local\bin'
-$BinaryPath = Join-Path $InstallPath 'dcr.exe'
+$BinPath     = Join-Path $env:USERPROFILE '.local\bin'
+$BinaryPath  = Join-Path $InstallPath 'dcr.exe'
 
-function Info($msg) { Write-Host "[INFO] $msg" -ForegroundColor Cyan }
-function Ok($msg) { Write-Host "[OK] $msg" -ForegroundColor Green }
-function Warn($msg) { Write-Host "[WARN] $msg" -ForegroundColor Yellow }
-function Fail($msg) { Write-Host "[ERROR] $msg" -ForegroundColor Red; exit 1 }
+function Info($msg)  { Write-Host "[INFO] $msg"  -ForegroundColor Cyan   }
+function Ok($msg)    { Write-Host "[OK] $msg"    -ForegroundColor Green  }
+function Warn($msg)  { Write-Host "[WARN] $msg"  -ForegroundColor Yellow }
+function Fail($msg)  { Write-Host "[ERROR] $msg" -ForegroundColor Red; exit 1 }
 
 function Require-Cmd($name) {
     if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
         Fail "Not found: $name"
+    }
+}
+
+function Select-Channel {
+    Write-Host "Choose channel:"
+    Write-Host "  1) Latest stable release (default)"
+    Write-Host "  2) Latest dev (pre-release)"
+    $choice = Read-Host "Enter 1 or 2 [1]"
+    if ([string]::IsNullOrWhiteSpace($choice)) { $choice = '1' }
+
+    switch ($choice) {
+        '1' { return 'stable' }
+        '2' { return 'dev'    }
+        default { Fail 'Unknown option' }
     }
 }
 
@@ -26,7 +41,7 @@ function Select-Mode {
 
     switch ($choice) {
         '1' { return 'release' }
-        '2' { return 'build' }
+        '2' { return 'build'   }
         default { Fail 'Unknown option' }
     }
 }
@@ -38,18 +53,35 @@ function Get-Target {
     return 'x86_64-pc-windows-msvc'
 }
 
+function Fetch-ReleaseJson($channel) {
+    if ($channel -eq 'dev') {
+        Info "Looking for latest dev (pre-release)..."
+        $releases = Invoke-RestMethod -Method Get -Uri $ApiAll
+        $pre = $releases | Where-Object { $_.prerelease -eq $true } | Select-Object -First 1
+        if (-not $pre) { Fail "No dev (pre-release) found on GitHub" }
+        return $pre
+    } else {
+        return Invoke-RestMethod -Method Get -Uri $ApiLatest
+    }
+}
+
 function Install-FromRelease {
-    param([string]$target)
+    param([string]$target, [string]$channel)
 
     New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
 
-    $assetName = "dcr-$target.exe"
-    Info "Fetching latest release..."
-    $release = Invoke-RestMethod -Method Get -Uri $ApiUrl
+    $release = Fetch-ReleaseJson $channel
+    $tag     = $release.tag_name
+    $version = $tag.TrimStart('v')
+
+    # Имя бинарника: dcr-<triple>-<version>.exe
+    $assetName = "dcr-$target-$version.exe"
+
+    Info "Fetching release $tag (channel: $channel)..."
 
     $asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
     if (-not $asset) {
-        Fail "Asset $assetName not found in release $($release.tag_name)"
+        Fail "Asset $assetName not found in release $tag"
     }
 
     Info "Downloading $assetName..."
@@ -58,7 +90,7 @@ function Install-FromRelease {
 }
 
 function Install-FromSource {
-    param([string]$target)
+    param([string]$target, [string]$channel)
 
     Require-Cmd 'git'
     Require-Cmd 'cargo'
@@ -67,7 +99,15 @@ function Install-FromSource {
     if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
 
     Info 'Cloning repository...'
-    git clone --depth 1 $RepoUrl $tmp | Out-Null
+    if ($channel -eq 'dev') {
+        # Пробуем ветку dev
+        $result = git clone --depth 1 --branch dev $RepoUrl $tmp 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            git clone --depth 1 $RepoUrl $tmp | Out-Null
+        }
+    } else {
+        git clone --depth 1 $RepoUrl $tmp | Out-Null
+    }
 
     Info 'Building release binary...'
     Push-Location $tmp
@@ -100,13 +140,14 @@ function Setup-Path {
 }
 
 Info 'Starting DCR installation'
-$mode = Select-Mode
-$target = Get-Target
+$channel = Select-Channel
+$mode    = Select-Mode
+$target  = Get-Target
 
 if ($mode -eq 'build') {
-    Install-FromSource -target $target
+    Install-FromSource -target $target -channel $channel
 } else {
-    Install-FromRelease -target $target
+    Install-FromRelease -target $target -channel $channel
 }
 
 Setup-Path
