@@ -22,6 +22,7 @@ fn main() {
         "add" => cli::add::add(rest),
         "build" => cli::build::build(rest),
         "run" => cli::run::run(rest),
+        "tree" => cli::tree::tree(rest),
         "test" | "tests" => cli::test::test(rest),
         "clean" => cli::clean::clean(rest),
         "gen" => cli::r#gen::r#gen(rest),
