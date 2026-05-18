@@ -112,27 +112,11 @@ jobs:
           name: release-notes
           path: .github
 
-      - name: Install apt packages
-        if: runner.os == 'Linux' && matrix.apt != ''
+      - name: Install cargo-zigbuild (Linux cross-compilation)
+        if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu musl-tools
-          case "${{ matrix.target }}" in
-            aarch64-unknown-linux-gnu)
-              echo "CC_aarch64-unknown-linux-gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-              echo "AR_aarch64-unknown-linux-gnu=aarch64-linux-gnu-ar" >> $GITHUB_ENV
-              ;;
-            x86_64-unknown-linux-musl)
-              echo "CC_x86_64-unknown-linux-musl=x86_64-linux-musl-gcc" >> $GITHUB_ENV
-              ;;
-            aarch64-unknown-linux-musl)
-              curl -L https://musl.cc/aarch64-linux-musl-cross.tgz -o /tmp/musl-aarch64.tgz
-              sudo tar xzf /tmp/musl-aarch64.tgz -C /opt
-              echo "/opt/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
-              echo "CC_aarch64-unknown-linux-musl=aarch64-linux-musl-gcc" >> $GITHUB_ENV
-              echo "AR_aarch64-unknown-linux-musl=aarch64-linux-musl-ar" >> $GITHUB_ENV
-              ;;
-          esac
+          pip install cargo-zigbuild
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Setup LLVM + MinGW (gnullvm)
         if: contains(matrix.target, 'gnullvm')
@@ -148,17 +132,12 @@ jobs:
 
       - name: Build
         shell: bash
-        env:
-          MATRIX_ENV_CC: ${{ matrix.env_cc }}
-          MATRIX_ENV_LINKER: ${{ matrix.env_linker }}
         run: |
-          if [[ -n "${MATRIX_ENV_CC:-}" ]]; then
-            export "${MATRIX_ENV_CC?}"
+          if [ "${{ runner.os }}" = "Linux" ] && [ "${{ matrix.target }}" != "x86_64-unknown-linux-gnu" ]; then
+            cargo zigbuild --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
           fi
-          if [[ -n "${MATRIX_ENV_LINKER:-}" ]]; then
-            export "${MATRIX_ENV_LINKER?}"
-          fi
-          cargo build --release --target ${{ matrix.target }}
 
       - name: Derive version string
         shell: bash
