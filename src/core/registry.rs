@@ -20,10 +20,21 @@ pub struct RegistryManager {
     pub path: PathBuf,
 }
 
+fn home_dir() -> Option<PathBuf> {
+    if let Ok(home) = std::env::var("HOME") {
+        return Some(PathBuf::from(home));
+    }
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        return Some(PathBuf::from(profile));
+    }
+    None
+}
+
 impl RegistryManager {
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let home = std::env::var("HOME")?;
-        let dcr_dir = PathBuf::from(home).join(".dcr");
+        let dcr_dir = home_dir()
+            .ok_or("Cannot determine home directory")?
+            .join(".dcr");
         let config_path = dcr_dir.join("config.toml");
 
         if !config_path.exists() {

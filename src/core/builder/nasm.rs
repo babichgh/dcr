@@ -37,7 +37,7 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
         for obj in &objects {
             cmd.arg(obj);
         }
-        if std::env::var("DCR_DEBUG").is_ok() {
+        if ctx.verbose || std::env::var("DCR_DEBUG").is_ok() {
             eprintln!("[dcr] {:?}", cmd);
         }
         match cmd.status() {
@@ -72,7 +72,11 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
     }
     let name = ctx.output_filename.unwrap_or(ctx.project_name);
     let ext = ctx.output_extension.unwrap_or("");
-    let final_name = if ext.is_empty() { name.to_string() } else { format!("{}.{}", name, ext) };
+    let final_name = if ext.is_empty() {
+        name.to_string()
+    } else {
+        format!("{}.{}", name, ext)
+    };
 
     let out_path = if ctx.kind == "sharedlib" {
         platform::shared_lib_path(ctx.profile, &final_name, ctx.target_dir)
@@ -81,7 +85,7 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
     };
     cmd.arg("-o").arg(out_path);
 
-    if std::env::var("DCR_DEBUG").is_ok() {
+    if ctx.verbose || std::env::var("DCR_DEBUG").is_ok() {
         eprintln!("[dcr] {:?}", cmd);
     }
     match cmd.status() {
@@ -151,7 +155,7 @@ fn build_object(
         cmd.arg(flag);
     }
 
-    if std::env::var("DCR_DEBUG").is_ok() {
+    if ctx.verbose || std::env::var("DCR_DEBUG").is_ok() {
         eprintln!("[dcr] {:?}", cmd);
     }
 

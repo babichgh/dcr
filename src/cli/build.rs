@@ -77,7 +77,13 @@ pub fn build(args: &[String]) -> i32 {
         let _ = clean(&clean_args);
     }
     match with_dir(&root, || {
-        build_from_root(&root, &flags.profile, flags.target.as_deref(), flags.force)
+        build_from_root(
+            &root,
+            &flags.profile,
+            flags.target.as_deref(),
+            flags.force,
+            flags.verbose,
+        )
     }) {
         Ok(()) => 0,
         Err(msg) => {
@@ -377,6 +383,7 @@ fn build_from_root(
     profile: &str,
     target: Option<&str>,
     force: bool,
+    verbose: bool,
 ) -> Result<(), String> {
     let config = Config::open("./dcr.toml").map_err(|err| err.to_string())?;
     let project_name = get_config_str(&config, "package.name");
@@ -418,12 +425,19 @@ fn build_from_root(
             );
         }
         if let Some(workspace) = parse_workspace(&config, profile, build_target.as_deref(), root)? {
-            build_workspace(&workspace, profile, build_target.as_deref(), force)?;
+            build_workspace(&workspace, profile, build_target.as_deref(), force, verbose)?;
             let excludes: Vec<std::path::PathBuf> =
                 workspace.members.iter().map(|m| m.path.clone()).collect();
-            build_project_at(root, profile, build_target.as_deref(), &excludes, force)?;
+            build_project_at(
+                root,
+                profile,
+                build_target.as_deref(),
+                &excludes,
+                force,
+                verbose,
+            )?;
         } else {
-            build_project_at(root, profile, build_target.as_deref(), &[], force)?;
+            build_project_at(root, profile, build_target.as_deref(), &[], force, verbose)?;
         }
     }
     let elapsed = ((start_time.elapsed().as_secs_f64() * 100.0).trunc()) / 100.0;
@@ -440,9 +454,10 @@ fn build_workspace(
     profile: &str,
     target: Option<&str>,
     force: bool,
+    verbose: bool,
 ) -> Result<(), String> {
     for member in &workspace.members {
-        build_project_at(&member.path, profile, target, &[], force)?;
+        build_project_at(&member.path, profile, target, &[], force, verbose)?;
     }
     Ok(())
 }
@@ -453,6 +468,7 @@ fn build_project_at(
     target: Option<&str>,
     exclude_dirs: &[std::path::PathBuf],
     force: bool,
+    verbose: bool,
 ) -> Result<(), String> {
     with_dir(project_root, || {
         check_interrupted()?;
@@ -500,21 +516,30 @@ fn build_project_at(
             .or_else(|| get_config_opt(&config, "toolchain.rcc"));
         let mut build_cflags =
             get_list_with_profile_and_target(&config, "cflags", profile, build_target)?;
-        // Автоматически добавляем --target=..., если задан build.target и флаг ещё не указан
-        if let Some(t) = build_target {
-            if !t.trim().is_empty() {
-                let target_flag = format!("--target={}", t.trim());
-                if !build_cflags.iter().any(|f| f == &target_flag || f.starts_with("--target=")) {
-                    build_cflags.insert(0, target_flag);
-                }
+        if let Some(t) = build_target
+            && !t.trim().is_empty()
+        {
+            let target_flag = format!("--target={}", t.trim());
+            if !build_cflags
+                .iter()
+                .any(|f| f == &target_flag || f.starts_with("--target="))
+            {
+                build_cflags.insert(0, target_flag);
             }
         }
-        let build_ldflags =
+        let mut build_ldflags =
             get_list_with_profile_and_target(&config, "ldflags", profile, build_target)?;
+        let build_ldscript =
+            get_string_with_profile_and_target(&config, "ldscript", profile, build_target);
+        if !build_ldscript.is_empty() {
+            build_ldflags.push(format!("-T{}", build_ldscript));
+        }
 
         // Новые поля: filename и extension
-        let output_filename = get_string_with_profile_and_target(&config, "filename", profile, build_target);
-        let output_extension = get_string_with_profile_and_target(&config, "extension", profile, build_target);
+        let output_filename =
+            get_string_with_profile_and_target(&config, "filename", profile, build_target);
+        let output_extension =
+            get_string_with_profile_and_target(&config, "extension", profile, build_target);
         let build_excludes =
             get_list_with_profile_and_target(&config, "exclude", profile, build_target)?;
         let build_includes =
@@ -578,7 +603,7 @@ fn build_project_at(
                                 dep_root.display()
                             ));
                         }
-                        build_project_at(&dep_root, profile, build_target, &[], force)?;
+                        build_project_at(&dep_root, profile, build_target, &[], force, verbose)?;
                         print!(
                             "\r{:100}\r       {} {} v{}",
                             "",
@@ -693,8 +718,17 @@ fn build_project_at(
             libs: &resolved.libs,
             cflags: &resolved_cflags,
             ldflags: &resolved_ldflags,
-            output_filename: if output_filename.is_empty() { None } else { Some(output_filename.as_str()) },
-            output_extension: if output_extension.is_empty() { None } else { Some(output_extension.as_str()) },
+            output_filename: if output_filename.is_empty() {
+                None
+            } else {
+                Some(output_filename.as_str())
+            },
+            output_extension: if output_extension.is_empty() {
+                None
+            } else {
+                Some(output_extension.as_str())
+            },
+            verbose,
         };
         if std::env::var("DCR_DEBUG").is_ok() {
             eprintln!("[dcr] debug: compiler={}", ctx.compiler);

@@ -43,6 +43,7 @@ kind = "bin"
 - `platform` (string, optional): architecture hint for compiler (used for `-march` or `/arch`).
 - `cflags` (string array, optional): extra compile flags.
 - `ldflags` (string array, optional): extra link flags.
+- `ldscript` (string, optional): linker script path. Passed as `-T <path>` to the linker. Useful for bare-metal/embedded/freestanding targets.
 - `exclude` (string array, optional): paths or glob patterns to skip during source/header collection.
 - `include` (string array, optional): allowlist paths or globs that override `exclude`.
 - `include` directory entries (non-glob) are also passed to the compiler as `-I` include paths.

@@ -1,4 +1,5 @@
 use crate::core::config::Config;
+use crate::core::deps::register;
 use crate::utils::fs::find_project_root;
 use crate::utils::log::error;
 use crate::utils::text::{BOLD_GREEN, colored};
@@ -12,6 +13,7 @@ pub struct AddArgs {
     pub branch: Option<String>,
     pub tag: Option<String>,
     pub rev: Option<String>,
+    pub version_from_registry: Option<String>,
 }
 
 pub fn add(args: &[String]) -> i32 {
@@ -71,6 +73,8 @@ pub fn add(args: &[String]) -> i32 {
         let mut table = Map::new();
         table.insert("path".to_string(), Value::String(path));
         Value::Table(table)
+    } else if let Some(version) = add_args.version_from_registry {
+        Value::String(version)
     } else {
         error("Dependency source (path or git) must be provided");
         return 1;
@@ -124,8 +128,38 @@ fn parse_add_args(args: &[String]) -> Result<AddArgs, i32> {
         }
         source_spec = s.clone();
     } else {
-        error("Dependency source is required");
-        return Err(1);
+        // No source provided — try registry auto-lookup
+        match register::resolve_package_from_registry(&name) {
+            Ok(info) => {
+                let version = info
+                    .get("latest_version")
+                    .or_else(|| info.get("version"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        (
+                            "Registry entry for `".to_string() + &name + "` has no version field",
+                            1,
+                        )
+                    })
+                    .map_err(|(msg, code)| {
+                        error(&msg);
+                        code
+                    })?;
+                return Ok(AddArgs {
+                    name,
+                    path: None,
+                    git: None,
+                    branch: None,
+                    tag: None,
+                    rev: None,
+                    version_from_registry: Some(version.to_string()),
+                });
+            }
+            Err(e) => {
+                error(&format!("Cannot add `{}` without source: {}", name, e));
+                return Err(1);
+            }
+        }
     }
 
     while let Some(arg) = iter.next() {
@@ -197,5 +231,6 @@ fn parse_add_args(args: &[String]) -> Result<AddArgs, i32> {
         branch,
         tag,
         rev,
+        version_from_registry: None,
     })
 }

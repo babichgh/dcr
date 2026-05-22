@@ -18,6 +18,7 @@ target = "string"              # optional
 platform = "string"            # optional
 cflags = ["string", "..."]     # optional
 ldflags = ["string", "..."]    # optional
+ldscript = "string"            # optional (linker script, passed as -T<path>)
 exclude = ["string", "..."]    # optional
 include = ["string", "..."]    # optional
 roots = ["string", "..."]      # optional

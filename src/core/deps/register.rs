@@ -15,9 +15,23 @@ pub struct DcrConfig {
     pub registry: std::collections::HashMap<String, Registry>,
 }
 
+fn home_dir() -> Option<PathBuf> {
+    if let Ok(home) = std::env::var("HOME") {
+        return Some(PathBuf::from(home));
+    }
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        return Some(PathBuf::from(profile));
+    }
+    None
+}
+
+fn dcr_config_dir() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".dcr"))
+}
+
 pub fn get_registry_config() -> Option<DcrConfig> {
-    let home = std::env::var("HOME").ok()?;
-    let config_path = Path::new(&home).join(".dcr/config.toml");
+    let home = home_dir()?;
+    let config_path = home.join(".dcr/config.toml");
     if !config_path.exists() {
         return None;
     }
@@ -30,8 +44,9 @@ pub fn get_index_path() -> PathBuf {
     std::env::var("DCR_INDEX_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            Path::new(&home).join(".dcr").join("index.json")
+            dcr_config_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("index.json")
         })
 }
 

@@ -28,7 +28,7 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
         for obj in &objects {
             cmd.arg(obj);
         }
-        if std::env::var("DCR_DEBUG").is_ok() {
+        if ctx.verbose || std::env::var("DCR_DEBUG").is_ok() {
             eprintln!("[dcr] {:?}", cmd);
         }
         match cmd.status() {
@@ -97,7 +97,7 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
     };
     cmd.arg(format!("/Fe:{out_path}"));
 
-    if std::env::var("DCR_DEBUG").is_ok() {
+    if ctx.verbose || std::env::var("DCR_DEBUG").is_ok() {
         eprintln!("[dcr] {:?}", cmd);
     }
     match cmd.status() {

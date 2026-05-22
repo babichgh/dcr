@@ -14,6 +14,9 @@ Added:
   Produces `KERNEL.EFI` (works for `bin`, `staticlib`, and `sharedlib`).
 - Automatic injection of `--target=<build.target>` into compiler flags when `build.target` is set in `dcr.toml`. This greatly simplifies clang-based cross-compilation (especially for bare-metal targets like `aarch64-none-elf`).
 - Bare-metal targets (containing `none`, `-elf`, `eabi`, `baremetal`) no longer receive DCR's internal default flags (`-g`, `-Wall`, `-Wextra`, `-fno-omit-frame-pointer`, `-DDCR_DEBUG`, etc.). Prevents unwanted sections (`.comment`, debug info, etc.) that break custom linker scripts when `inherit = true`.
+- `build.ldscript` in `dcr.toml` — linker script path passed as `-T <path>` to the linker. Essential for bare-metal/embedded/freestanding targets.
+- `dcr build --verbose` — prints compiler/linker command lines (also works with `DCR_DEBUG` env var).
+- `dcr add <name>` without a source argument — if a registry is configured, DCR looks up the package by name and adds it as a version dependency.
 
 Fixed:
 

@@ -6,6 +6,7 @@ pub struct BuildRunFlags {
     pub target: Option<String>,
     pub force: bool,
     pub clean: bool,
+    pub verbose: bool,
 }
 
 pub fn parse_build_run_flags(args: &[String]) -> Result<BuildRunFlags, i32> {
@@ -13,6 +14,7 @@ pub fn parse_build_run_flags(args: &[String]) -> Result<BuildRunFlags, i32> {
     let mut target = None;
     let mut force = false;
     let mut clean = false;
+    let mut verbose = false;
     let mut iter = args.iter();
 
     while let Some(arg) = iter.next() {
@@ -27,6 +29,10 @@ pub fn parse_build_run_flags(args: &[String]) -> Result<BuildRunFlags, i32> {
         }
         if candidate == "clean" {
             clean = true;
+            continue;
+        }
+        if candidate == "verbose" {
+            verbose = true;
             continue;
         }
         if candidate == "target" {
@@ -55,5 +61,6 @@ pub fn parse_build_run_flags(args: &[String]) -> Result<BuildRunFlags, i32> {
         target,
         force,
         clean,
+        verbose,
     })
 }

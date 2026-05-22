@@ -20,7 +20,7 @@ dcr --update
 
 ## Notes on argument parsing
 
-- `build`/`run` parse flags in any order (`--debug|--release`, `--force`, `--clean`) and reject duplicates.
+- `build`/`run` parse flags in any order (`--debug|--release`, `--force`, `--clean`, `--verbose`) and reject duplicates.
 - `new` requires exactly one argument.
 - `init` and `--update` do not accept extra arguments.
 - `clean` accepts `--debug|--release` and optional `--all`.
