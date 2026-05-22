@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.7] - 2026-05-21
+
+Added:
+
+- `build.filename` and `build.extension` in `dcr.toml` — complete control over the final artifact name without relying on `package.name`.
+  Example:
+  ```toml
+  [build]
+  filename = "KERNEL"
+  extension = "EFI"
+  ```
+  Produces `KERNEL.EFI` (works for `bin`, `staticlib`, and `sharedlib`).
+- Automatic injection of `--target=<build.target>` into compiler flags when `build.target` is set in `dcr.toml`. This greatly simplifies clang-based cross-compilation (especially for bare-metal targets like `aarch64-none-elf`).
+- Bare-metal targets (containing `none`, `-elf`, `eabi`, `baremetal`) no longer receive DCR's internal default flags (`-g`, `-Wall`, `-Wextra`, `-fno-omit-frame-pointer`, `-DDCR_DEBUG`, etc.). Prevents unwanted sections (`.comment`, debug info, etc.) that break custom linker scripts when `inherit = true`.
+
+Fixed:
+
+- `build.target` declared in `dcr.toml` is now correctly used as the default target even when `--target` is not passed on the command line (previously the host target was always forced for config resolution).
+
 ## [0.6.6] - 2026-05-18
 
 Fixed:
@@ -29,8 +48,9 @@ between `cli/build.rs`, `cli/run.rs`, `cli/clean.rs`, `cli/gen.rs`
 `package_root_from_registry_info`, `registry_include_dir`, `registry_lib_dir`,
 `path_from_string_dep`
 - Unit tests for `register.rs` (`is_registry_dep`, `package_root_from_registry_info`),
-`deps/mod.rs` (`path_dep_path`, `push_default_lib_dirs`),
-`utils/build.rs` (`normalize_target_os`, `parse_version_info`)
+  `deps/mod.rs` (`path_dep_path`, `push_default_lib_dirs`),
+  `utils/build.rs` (`normalize_target_os`, `parse_version_info`)
+- `dcr tree` command — visual dependency tree viewer (similar to `cargo tree`)
 
 Removed:
 

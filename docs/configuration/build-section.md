@@ -8,6 +8,8 @@ language = "c"
 standard = "c11"
 compiler = "clang"
 kind = "bin"
+# filename = "KERNEL"
+# extension = "BIN"
 # optional:
 # inherit = true  # Inherit from base (default true)
 # targets = ["linux", "macos"]  # Multiple targets to build
@@ -32,9 +34,12 @@ kind = "bin"
 - `standard` (string, required): language standard passed to compiler.
 - `compiler` (string, required): compiler command (for example `clang`, `gcc`, `cl`).
 - `kind` (string, required): `bin`, `staticlib`, or `sharedlib`.
+- `filename` (string, optional): custom output filename (without extension). Overrides `package.name` for the final artifact.
+- `extension` (string, optional): custom file extension without the leading dot (e.g. `BIN`, `efi`, `EFI`). Combined with `filename`.
 - `inherit` (bool, optional): inherit settings from base `[build]` (default `true`). If `false`, only use target/profile specific settings.
 - `targets` (string array, optional): list of targets to build simultaneously. Supports short names (`linux`, `macos`, `windows`).
 - `target` (string, optional): custom output directory for final artifact.
+  When set, DCR automatically injects `--target=<value>` into `cflags` (useful for clang cross-compilation).
 - `platform` (string, optional): architecture hint for compiler (used for `-march` or `/arch`).
 - `cflags` (string array, optional): extra compile flags.
 - `ldflags` (string array, optional): extra link flags.

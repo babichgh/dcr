@@ -25,6 +25,8 @@ dcr build --debug --clean
 ## Config values used
 
 - `package.name`
+- `build.filename`
+- `build.extension`
 - `build.compiler`
 - `build.language`
 - `build.standard`
@@ -60,7 +62,9 @@ dcr build --debug --clean
 - Incremental rebuild checks source/object mtime and tracked header dependencies.
 - `--force` skips build cache checks and recompiles.
 - `--clean` removes `target/<profile>` and `build.clean` paths before building.
+- `build.filename` + `build.extension` allow full control over the final artifact name (e.g. `KERNEL.BIN` instead of using `package.name`).
 - Default GCC/Clang profile flags: `debug` -> `-O0 -g -Wall -Wextra -fno-omit-frame-pointer -DDCR_DEBUG`, `release` -> `-O3 -DNDEBUG`.
+  These defaults are **not applied** for bare-metal targets (e.g. `aarch64-none-elf`, targets containing `none` / `-elf` / `eabi`).
 - For `language = "asm"` with `compiler = "as"`/`"gas"`, use `.s` files (no preprocessing). For `.S`, use `gcc` or `clang`.
 - In workspace root, `dcr build` builds all members in dependency order.
 - `build.exclude` removes paths from source/header collection; `build.include` re-allows matching paths and has priority over `exclude`.

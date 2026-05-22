@@ -129,6 +129,19 @@ fn default_flags(profile: &str) -> &'static [&'static str] {
     }
 }
 
+fn is_bare_metal_target(target: Option<&str>) -> bool {
+    if let Some(t) = target {
+        let lower = t.to_lowercase();
+        lower.contains("none")
+            || lower.contains("-elf")
+            || lower.contains("eabi")
+            || lower.contains("baremetal")
+            || lower.contains("bare-metal")
+    } else {
+        false
+    }
+}
+
 fn build_objects(
     compiler: &str,
     sources: &[String],
@@ -183,7 +196,8 @@ fn build_object(
         cmd.arg(format!("-std={}", ctx.standard));
     }
 
-    if ctx.cflags.is_empty() {
+    let use_dcr_defaults = ctx.cflags.is_empty() && !is_bare_metal_target(ctx.target);
+    if use_dcr_defaults {
         for flag in default_flags(ctx.profile) {
             cmd.arg(flag);
         }

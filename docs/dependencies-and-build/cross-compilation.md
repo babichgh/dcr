@@ -178,6 +178,8 @@ compiler = "aarch64-linux-gnu-gcc"' >> dcr.toml
 dcr build --target aarch64-linux-gnu --release
 ```
 
+**Note:** If you set `target = "aarch64-linux-gnu"` (or any value) directly under `[build]`, DCR will automatically add `--target=...` to cflags when using clang. You usually don't need to repeat it manually.
+
 ### Windows Build on Linux
 
 ```bash
