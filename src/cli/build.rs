@@ -355,9 +355,15 @@ fn ensure_target_dirs(items: &[String], profile: &str, target_dir: Option<String
     if let Some(dir) = &target_dir {
         let _ = fs::create_dir_all(dir);
     } else {
+        let default_dir = if cfg!(target_os = "linux") {
+            let arch = std::env::consts::ARCH;
+            format!("{arch}-unknown-linux-gnu/{profile}")
+        } else {
+            profile.to_string()
+        };
         let target_items = check_dir(Some("target")).unwrap_or_default();
-        if !target_items.contains(&profile.to_string()) {
-            let _ = fs::create_dir(format!("./target/{profile}"));
+        if !target_items.contains(&default_dir) {
+            let _ = fs::create_dir_all(format!("./target/{default_dir}"));
         }
     }
 }
@@ -1317,8 +1323,10 @@ fn write_build_fingerprint(ctx: &BuildContext, fingerprint: &str) -> Result<(), 
 }
 
 fn build_cache_path(profile: &str, target_dir: Option<&str>) -> std::path::PathBuf {
-    let _ = target_dir;
-    Path::new("./target").join(profile).join(".dcr-build.hash")
+    match target_dir {
+        Some(dir) => Path::new(dir).join(".dcr-build.hash"),
+        None => Path::new("./target").join(profile).join(".dcr-build.hash"),
+    }
 }
 
 fn build_output_path(ctx: &BuildContext) -> String {
@@ -1332,11 +1340,16 @@ fn build_output_path(ctx: &BuildContext) -> String {
     };
 
     if ctx.kind == "staticlib" {
-        // Для библиотек добавляем lib префикс если нужно, но упростим
         return crate::platform::lib_path(ctx.profile, &final_name, ctx.target_dir);
     }
     if ctx.kind == "sharedlib" {
         return crate::platform::shared_lib_path(ctx.profile, &final_name, ctx.target_dir);
+    }
+    if ctx.kind == "efi" {
+        return crate::platform::efi_path(ctx.profile, &final_name, ctx.target_dir);
+    }
+    if ctx.kind == "elf" {
+        return crate::platform::elf_path(ctx.profile, &final_name, ctx.target_dir);
     }
     crate::platform::bin_path(ctx.profile, &final_name, ctx.target_dir)
 }

@@ -91,17 +91,27 @@ fn parse_clean_flags(args: &[String]) -> Result<CleanFlags, String> {
 fn clean_from_root(root: &Path, flags: &CleanFlags) -> Result<(), String> {
     let config = Config::open("./dcr.toml").map_err(|err| err.to_string())?;
 
-    let target = flags.target.clone().or_else(|| {
-        Some(if cfg!(target_os = "linux") {
-            "x86_64-unknown-linux-gnu".to_string()
-        } else if cfg!(target_os = "macos") {
-            "x86_64-apple-darwin".to_string()
-        } else if cfg!(target_os = "windows") {
-            "x86_64-pc-windows-msvc".to_string()
-        } else {
-            "unknown".to_string()
+    let target = flags
+        .target
+        .clone()
+        .or_else(|| {
+            config
+                .get("build.target")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
         })
-    });
+        .or_else(|| {
+            Some(if cfg!(target_os = "linux") {
+                "x86_64-unknown-linux-gnu".to_string()
+            } else if cfg!(target_os = "macos") {
+                "x86_64-apple-darwin".to_string()
+            } else if cfg!(target_os = "windows") {
+                "x86_64-pc-windows-msvc".to_string()
+            } else {
+                "unknown".to_string()
+            })
+        });
 
     if flags.all
         && let Some(workspace) = parse_workspace(

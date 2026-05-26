@@ -33,6 +33,12 @@ pub struct BuildContext<'a> {
 
 pub fn build(ctx: &BuildContext) -> Result<f64, String> {
     let compiler = ctx.compiler.to_lowercase();
+    if !check_compiler_exists(ctx.compiler) {
+        return Err(format!(
+            "Compiler not found: {}. Make sure it is installed and available in PATH.",
+            ctx.compiler
+        ));
+    }
     if compiler.contains("clang-cl") {
         return msvc::build(ctx);
     }
@@ -46,6 +52,14 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
         return msvc::build(ctx);
     }
     unix_cc::build(ctx)
+}
+
+fn check_compiler_exists(compiler: &str) -> bool {
+    let name = if compiler.is_empty() { "cc" } else { compiler };
+    std::process::Command::new(name)
+        .arg("--version")
+        .output()
+        .is_ok()
 }
 
 pub fn collect_sources(ctx: &BuildContext) -> Result<Vec<String>, String> {

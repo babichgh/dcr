@@ -12,14 +12,44 @@ pub fn bin_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
 pub fn lib_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
     match target_dir {
         Some(dir) => format!("{}/lib{}.a", dir.trim_end_matches('/'), name),
-        None => format!("./target/{profile}/lib{name}.a"),
+        None => {
+            let arch = std::env::consts::ARCH;
+            let target = format!("{arch}-unknown-linux-gnu");
+            format!("./target/{target}/{profile}/lib{name}.a")
+        }
+    }
+}
+
+pub fn elf_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
+    match target_dir {
+        Some(dir) => format!("{}/{}", dir.trim_end_matches('/'), name),
+        None => {
+            let arch = std::env::consts::ARCH;
+            let target = format!("{arch}-unknown-linux-gnu");
+            format!("./target/{target}/{profile}/{name}")
+        }
+    }
+}
+
+pub fn efi_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
+    match target_dir {
+        Some(dir) => format!("{}/{}.efi", dir.trim_end_matches('/'), name),
+        None => {
+            let arch = std::env::consts::ARCH;
+            let target = format!("{arch}-unknown-linux-gnu");
+            format!("./target/{target}/{profile}/{name}.efi")
+        }
     }
 }
 
 pub fn shared_lib_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
     match target_dir {
         Some(dir) => format!("{}/lib{}.so", dir.trim_end_matches('/'), name),
-        None => format!("./target/{profile}/lib{name}.so"),
+        None => {
+            let arch = std::env::consts::ARCH;
+            let target = format!("{arch}-unknown-linux-gnu");
+            format!("./target/{target}/{profile}/lib{name}.so")
+        }
     }
 }
 
@@ -53,10 +83,9 @@ mod tests {
 
     #[test]
     fn lib_path_default() {
-        assert_eq!(
-            lib_path("debug", "mylib", None),
-            "./target/debug/libmylib.a"
-        );
+        let arch = std::env::consts::ARCH;
+        let expected = format!("./target/{arch}-unknown-linux-gnu/debug/libmylib.a");
+        assert_eq!(lib_path("debug", "mylib", None), expected);
     }
 
     #[test]
@@ -66,10 +95,9 @@ mod tests {
 
     #[test]
     fn shared_lib_path_default() {
-        assert_eq!(
-            shared_lib_path("debug", "mylib", None),
-            "./target/debug/libmylib.so"
-        );
+        let arch = std::env::consts::ARCH;
+        let expected = format!("./target/{arch}-unknown-linux-gnu/debug/libmylib.so");
+        assert_eq!(shared_lib_path("debug", "mylib", None), expected);
     }
 
     #[test]

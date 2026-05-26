@@ -33,7 +33,7 @@ kind = "bin"
   Mixed languages can be specified as an array, for example `["c", "c++", "asm"]`.
 - `standard` (string, required): language standard passed to compiler.
 - `compiler` (string, required): compiler command (for example `clang`, `gcc`, `cl`).
-- `kind` (string, required): `bin`, `staticlib`, or `sharedlib`.
+- `kind` (string, required): `bin`, `staticlib`, `sharedlib`, `efi`, or `elf`.
 - `filename` (string, optional): custom output filename (without extension). Overrides `package.name` for the final artifact.
 - `extension` (string, optional): custom file extension without the leading dot (e.g. `BIN`, `efi`, `EFI`). Combined with `filename`.
 - `inherit` (bool, optional): inherit settings from base `[build]` (default `true`). If `false`, only use target/profile specific settings.
@@ -151,4 +151,4 @@ rcc = "rcc"
 
 - Compiler backend is selected by compiler string (`gcc`, `clang`, `cl`, `clang-cl`).
 - Empty or unknown compiler value falls back to clang-like build path.
-- `run` is not allowed for library kinds (`staticlib`, `sharedlib`).
+- `run` is not allowed for library kinds (`staticlib`, `sharedlib`), `efi`, or `elf`.

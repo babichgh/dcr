@@ -16,10 +16,11 @@ const BOLD_BLUE: &str = "\x1b[1m\x1b[94m";
 
 pub fn test(args: &[String]) -> i32 {
     let mut init_header = false;
+    let mut profile = "debug";
     for arg in args {
         if arg == "--help" {
             println!("USAGE:");
-            println!("    dcr test [--init]");
+            println!("    dcr test [--init] [--debug | --release]");
             println!();
             println!("ALIASES:");
             println!("    dcr tests");
@@ -29,10 +30,16 @@ pub fn test(args: &[String]) -> i32 {
             println!();
             println!("OPTIONS:");
             println!("    --init            Create tests/dcr_test.h in current project");
+            println!("    --debug           Build and run tests with debug profile (default)");
+            println!("    --release         Build and run tests with release profile");
             return 0;
         }
         if arg == "--init" {
             init_header = true;
+            continue;
+        }
+        if arg == "--debug" || arg == "--release" {
+            profile = arg.trim_start_matches("--");
             continue;
         }
         error("Unknown argument");
@@ -68,7 +75,7 @@ pub fn test(args: &[String]) -> i32 {
         }
     }
 
-    match with_dir(&root, run_testsuite) {
+    match with_dir(&root, || run_testsuite(profile)) {
         Ok(code) => code,
         Err(msg) => {
             error(&msg);
@@ -77,13 +84,12 @@ pub fn test(args: &[String]) -> i32 {
     }
 }
 
-fn run_testsuite() -> Result<i32, String> {
-    if build::build(&[String::from("--release")]) != 0 {
+fn run_testsuite(profile: &str) -> Result<i32, String> {
+    if build::build(&[format!("--{profile}")]) != 0 {
         return Ok(1);
     }
 
     let config = Config::open("./dcr.toml").map_err(|_| "Failed to read dcr.toml".to_string())?;
-    let profile = "release";
     let name = get_config_str(&config, "package.name");
     let language = get_language_with_profile(&config, profile)?;
     let compiler_cfg = get_string_with_profile(&config, "compiler", profile);

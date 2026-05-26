@@ -138,8 +138,8 @@ fn download_asset(client: &Client, url: &str) -> Result<Vec<u8>, String> {
 fn asset_candidates(target: &str) -> Vec<String> {
     let mut names = vec![format!("dcr-{target}")];
 
-    if target == "x86_64-pc-windows-msvc" {
-        names.push("dcr-x86_64-pc-windows-msvc.exe".to_string());
+    if target.contains("-windows-") || target.ends_with("-windows") {
+        names.push(format!("dcr-{target}.exe"));
     }
 
     names

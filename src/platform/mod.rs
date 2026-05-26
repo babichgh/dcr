@@ -27,6 +27,50 @@ pub fn bin_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
     }
 }
 
+pub fn elf_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        linux::elf_path(profile, name, target_dir)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return macos::elf_path(profile, name, target_dir);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return windows::elf_path(profile, name, target_dir);
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        match target_dir {
+            Some(dir) => format!("{}/{}", dir.trim_end_matches('/'), name),
+            None => format!("./target/{profile}/{name}"),
+        }
+    }
+}
+
+pub fn efi_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        linux::efi_path(profile, name, target_dir)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return macos::efi_path(profile, name, target_dir);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return windows::efi_path(profile, name, target_dir);
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        match target_dir {
+            Some(dir) => format!("{}/{}.efi", dir.trim_end_matches('/'), name),
+            None => format!("./target/{profile}/{name}.efi"),
+        }
+    }
+}
+
 pub fn lib_path(profile: &str, name: &str, target_dir: Option<&str>) -> String {
     #[cfg(target_os = "linux")]
     {

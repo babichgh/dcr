@@ -64,7 +64,9 @@ dcr build --debug --clean
 - Incremental rebuild checks source/object mtime and tracked header dependencies.
 - `--force` skips build cache checks and recompiles.
 - `--clean` removes `target/<profile>` and `build.clean` paths before building.
-- `build.filename` + `build.extension` allow full control over the final artifact name (e.g. `KERNEL.BIN` instead of using `package.name`).
+- `build.filename` + `build.extension` allow full control over the final artifact name (e.g. `KERNEL.BIN` instead of using `package.name`). When `build.kind = "efi"`, the output is a PE32+ executable with `.efi` extension.
+- `build.kind = "efi"` links with `-shared -nostdlib -Wl,-dll -Wl,--subsystem,10` for UEFI PE32+ format. Use `build.filename` and `build.extension` for full control over the artifact name.
+- `build.kind = "elf"` produces a bare-metal ELF executable. Linking flags are user-controlled via `build.ldflags` (no PIE/CRT defaults are added).
 - Default GCC/Clang profile flags: `debug` -> `-O0 -g -Wall -Wextra -fno-omit-frame-pointer -DDCR_DEBUG`, `release` -> `-O3 -DNDEBUG`.
   These defaults are **not applied** for bare-metal targets (e.g. `aarch64-none-elf`, targets containing `none` / `-elf` / `eabi`).
 - For `language = "asm"` with `compiler = "as"`/`"gas"`, use `.s` files (no preprocessing). For `.S`, use `gcc` or `clang`.

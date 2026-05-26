@@ -51,10 +51,18 @@ pub fn get_index_path() -> PathBuf {
 }
 
 pub fn get_registry_cache_root() -> PathBuf {
-    get_index_path()
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."))
+    let index_path = get_index_path();
+    if let Some(parent) = index_path.parent() {
+        if parent.exists() {
+            return parent.to_path_buf();
+        }
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            eprintln!("Warning: failed to create registry cache directory: {e}");
+        }
+        parent.to_path_buf()
+    } else {
+        PathBuf::from(".")
+    }
 }
 
 pub fn package_root_from_registry_info(pkg_info: &JsonValue) -> Result<PathBuf, String> {
@@ -124,12 +132,16 @@ pub fn is_registry_dep(value: &TomlValue) -> bool {
         return !is_path_like_string(raw) && !is_git_like_string(raw);
     }
     if let Some(table) = value.as_table() {
-        return !table.contains_key("git")
-            && !table.contains_key("path")
-            && !table.contains_key("url")
-            && !table.contains_key("version");
+        if table.contains_key("git") || table.contains_key("path") || table.contains_key("url") {
+            return false;
+        }
+        table.contains_key("version")
+            || table.contains_key("features")
+            || table.contains_key("optional")
+            || table.contains_key("registry")
+    } else {
+        false
     }
-    false
 }
 
 pub fn path_from_string_dep(value: &TomlValue) -> Option<&str> {

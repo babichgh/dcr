@@ -20,7 +20,10 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
         ctx.exclude_dirs,
         ctx.include_paths,
     )?;
-    let obj_dir = Path::new("./target").join(ctx.profile).join("obj");
+    let obj_dir = match ctx.target_dir {
+        Some(dir) => Path::new(dir).join("obj"),
+        None => Path::new("./target").join(ctx.profile).join("obj"),
+    };
     let objects = build_objects(compiler, &sources, &obj_dir, ctx, "o")?;
 
     if ctx.kind == "staticlib" {
@@ -51,6 +54,12 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
             cmd.arg("-shared");
         }
     }
+    if ctx.kind == "efi" {
+        cmd.arg("-shared");
+        cmd.arg("-nostdlib");
+        cmd.arg("-Wl,-dll");
+        cmd.arg("-Wl,--subsystem,10");
+    }
     for obj in &objects {
         cmd.arg(obj);
     }
@@ -73,6 +82,10 @@ pub fn build(ctx: &BuildContext) -> Result<f64, String> {
 
     let out_path = if ctx.kind == "sharedlib" {
         platform::shared_lib_path(ctx.profile, &final_name, ctx.target_dir)
+    } else if ctx.kind == "efi" {
+        platform::efi_path(ctx.profile, &final_name, ctx.target_dir)
+    } else if ctx.kind == "elf" {
+        platform::elf_path(ctx.profile, &final_name, ctx.target_dir)
     } else {
         platform::bin_path(ctx.profile, &final_name, ctx.target_dir)
     };

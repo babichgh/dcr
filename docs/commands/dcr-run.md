@@ -23,7 +23,7 @@ dcr run --debug --clean
 
 ## Restrictions
 
-- If `build.kind = "staticlib"` or `build.kind = "sharedlib"`, `run` exits with error.
+- If `build.kind` (or `build.{profile}.kind`) is `"staticlib"` or `"sharedlib"`, `run` exits with error.
 - The profile is selected from the first argument.
 - `--target <triple>` runs the binary for specified target (short names: `linux`, `macos`, `windows`).
 - `--force` skips build cache checks and recompiles.

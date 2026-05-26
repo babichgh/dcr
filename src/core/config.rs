@@ -10,6 +10,7 @@ const DEFAULT_LANGUAGE: &str = "c";
 const DEFAULT_STANDARD: &str = "c11";
 const DEFAULT_COMPILER: &str = "clang";
 const DEFAULT_KIND: &str = "bin";
+const VALID_KINDS: &[&str] = &["bin", "staticlib", "sharedlib", "efi", "elf"];
 
 #[derive(Debug)]
 pub enum ConfigError {
@@ -242,7 +243,7 @@ impl Config {
         validate_toolchain(self.typed.toolchain.as_ref())?;
         if let Some(kind) = &self.typed.build.kind {
             let kind = kind.trim();
-            if !kind.is_empty() && kind != "bin" && kind != "staticlib" && kind != "sharedlib" {
+            if !kind.is_empty() && !VALID_KINDS.contains(&kind) {
                 return Err(ConfigError::Invalid("build.kind is invalid".into()));
             }
         }
@@ -410,7 +411,7 @@ impl Config {
         }
         if let Some(kind) = table.get("kind").and_then(|v| v.as_str()) {
             let kind = kind.trim();
-            if !kind.is_empty() && kind != "bin" && kind != "staticlib" && kind != "sharedlib" {
+            if !kind.is_empty() && !VALID_KINDS.contains(&kind) {
                 return Err(ConfigError::Invalid(format!(
                     "build.{profile}.kind is invalid"
                 )));
@@ -919,14 +920,16 @@ mod tests {
 
     #[test]
     fn validate_valid_kinds() {
-        for kind in ["bin", "staticlib", "sharedlib"] {
-            let dir = temp_dir(&format!("kind_{kind}"));
-            let content = format!(
+        for &kind in VALID_KINDS {
+            let dir = temp_dir("valid_kind");
+            let toml = format!(
                 "[package]\nname = \"test\"\nversion = \"0.1.0\"\n\n[build]\nlanguage = \"c\"\nstandard = \"c11\"\ncompiler = \"clang\"\nkind = \"{kind}\"\n\n[dependencies]\n"
             );
-            let path = write_toml_file(&dir, &content);
-            let result = Config::open(&path.to_string_lossy());
-            assert!(result.is_ok(), "kind '{kind}' should be valid");
+            let path = write_toml_file(&dir, &toml);
+            assert!(
+                Config::open(&path.to_string_lossy()).is_ok(),
+                "kind '{kind}' should be valid"
+            );
         }
     }
 

@@ -15,7 +15,7 @@ dcr clean --release --all
 ## Behavior
 
 - Without arguments: removes entire `target/`.
-- With profile: removes only `target/<profile>/`.
+- With profile: removes only the profile-specific directory. Respects `build.target` from config: if `build.target = "aarch64-unknown-linux-gnu"`, cleans `target/aarch64-unknown-linux-gnu/<profile>/`.
 - With `--all`: also cleans all workspace members.
 - Additionally removes paths from `build.clean` if configured.
 - `build.clean` supports `{profile}` and version placeholders.

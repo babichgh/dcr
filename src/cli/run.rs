@@ -69,15 +69,6 @@ pub fn run(args: &[String]) -> i32 {
         .get("package.name")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let build_kind = config
-        .get("build.kind")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let target_dir = config
-        .get("build.target")
-        .and_then(|v| v.as_str())
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty());
 
     let mut flags = match parse_build_run_flags(args) {
         Ok(v) => v,
@@ -98,6 +89,12 @@ pub fn run(args: &[String]) -> i32 {
         flags.target = Some(default_target.to_string());
     }
 
+    let build_kind = config
+        .get(&format!("build.{}.kind", flags.profile))
+        .and_then(|v| v.as_str())
+        .or_else(|| config.get("build.kind").and_then(|v| v.as_str()))
+        .unwrap_or("");
+
     let normalized_target_dir = flags
         .target
         .as_ref()
@@ -110,7 +107,9 @@ pub fn run(args: &[String]) -> i32 {
     let run_cmd = get_run_cmd(&config, &flags.profile, flags.target.as_deref(), version);
 
     let kind = build_kind.trim();
-    if run_cmd.is_none() && (kind == "staticlib" || kind == "sharedlib") {
+    if run_cmd.is_none()
+        && (kind == "staticlib" || kind == "sharedlib" || kind == "efi" || kind == "elf")
+    {
         error("Cannot run library build");
         return 1;
     }
@@ -128,13 +127,21 @@ pub fn run(args: &[String]) -> i32 {
         }
         println!("\n    {} {}", colored("Running", BOLD_GREEN), bin_path);
         println!("--------------------------------");
-        return run_binary(project_name, &flags.profile, target_dir);
+        return run_binary(
+            project_name,
+            &flags.profile,
+            normalized_target_dir.as_deref(),
+        );
     }
 
     let fallback_code = if let Some(cmd) = run_cmd {
         run_shell(&cmd)
     } else {
-        run_binary(project_name, &flags.profile, target_dir)
+        run_binary(
+            project_name,
+            &flags.profile,
+            normalized_target_dir.as_deref(),
+        )
     };
     if fallback_code != 1 {
         return fallback_code;

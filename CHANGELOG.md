@@ -1,9 +1,11 @@
 # Changelog
 
-## [0.6.7] - 2026-05-21
+## [0.6.7] - 2026-05-26
 
 Added:
 
+- `build.kind = "efi"` — UEFI PE32+ executable support. Links with `-shared -nostdlib -Wl,-dll -Wl,--subsystem,10`, output via `efi_path()` with `.efi` extension, rejected by `dcr run`.
+- `build.kind = "elf"` — bare-metal ELF executable support. Uses `elf_path()` output path, rejected by `dcr run`, no extra linker flags.
 - `build.filename` and `build.extension` in `dcr.toml` — complete control over the final artifact name without relying on `package.name`.
   Example:
   ```toml
@@ -21,6 +23,20 @@ Added:
 Fixed:
 
 - `build.target` declared in `dcr.toml` is now correctly used as the default target even when `--target` is not passed on the command line (previously the host target was always forced for config resolution).
+- `dcr run` with `--target` or `build.target` now correctly finds the binary in the arch-specific target directory.
+- `dcr run` checks profile-specific `build.{profile}.kind` before rejecting library builds (previously only checked `build.kind`).
+- `dcr clean` now reads `build.target` from `dcr.toml` when no `--target` flag is given.
+- Linux: target directory is now consistent — `target/<arch>-unknown-linux-gnu/<profile>/` (no stale `target/<profile>/`).
+- `dcr.lock` is now populated with all resolved dependencies (registry, path, git) instead of being always empty.
+- Git dependencies are now properly recognized and recorded in `dcr.lock`.
+- `is_registry_dep` correctly identifies version-based registry dependency tables (`{ version = "..." }`) and rejects tables with unknown keys.
+- `dcr test` accepts `--debug`/`--release` flags (defaults to `debug` profile instead of always `release`).
+- Build fingerprint cache (`build_cache_path`) now includes `target_dir` — different targets no longer share a single cache entry.
+- `object_path` no longer hardcodes the `src/` prefix — works correctly with custom `build.roots` (e.g. `roots = ["lib"]`).
+- `dcr update` now generates `.exe` candidates for all Windows targets, not just `x86_64-pc-windows-msvc`.
+- Compiler existence is verified before starting the build (clear error if compiler is not found in PATH).
+- Consolidated duplicate `OUTPUT_MUTEX` definitions — MSVC backend now uses the shared mutex from `common.rs`.
+- Registry cache root directory is created if missing (prevents cryptic errors when `~/.dcr/` does not exist).
 
 ## [0.6.6] - 2026-05-18
 

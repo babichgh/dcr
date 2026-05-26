@@ -5,7 +5,19 @@ pub mod register;
 
 use crate::core::config::Config;
 use crate::core::deps::common::ResolvedDeps;
+use crate::core::deps::lock::{DepLock, write_lock};
 use std::path::Path;
+
+fn dep_version(path: &Path) -> String {
+    Config::open(&path.join("dcr.toml").to_string_lossy())
+        .ok()
+        .and_then(|c| {
+            c.get("package.version")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_default()
+}
 
 pub fn resolve_deps(
     config: &Config,
@@ -26,7 +38,7 @@ pub fn resolve_deps(
         .to_string();
 
     let deps_table = config.get("dependencies").and_then(|v| v.as_table());
-    let lock_packages = Vec::new();
+    let mut lock_packages: Vec<DepLock> = Vec::new();
 
     if let Some(deps) = deps_table {
         for (name, value) in deps {
@@ -45,6 +57,23 @@ pub fn resolve_deps(
                         .to_string(),
                 );
                 resolved.libs.push(name.clone());
+
+                lock_packages.push(DepLock {
+                    name: name.clone(),
+                    version: pkg_info
+                        .get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    checksum: String::new(),
+                    source: format!(
+                        "registry+{}",
+                        pkg_info
+                            .get("registry_url")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("https://dcr-registry.pages.dev")
+                    ),
+                });
             } else if let Some(path) = path_dep_path(value) {
                 let dep_root = project_root.join(path);
                 if let Some(table) = value.as_table() {
@@ -86,11 +115,25 @@ pub fn resolve_deps(
                     push_default_lib_dirs(&mut resolved.lib_dirs, &dep_root);
                     resolved.libs.push(name.clone());
                 }
+
+                lock_packages.push(DepLock {
+                    name: name.clone(),
+                    version: dep_version(&dep_root),
+                    checksum: String::new(),
+                    source: format!("path+{}", dep_root.display()),
+                });
+            } else if let Some(git_info) = git_dep(value) {
+                lock_packages.push(DepLock {
+                    name: name.clone(),
+                    version: git_info.version.unwrap_or_default(),
+                    checksum: String::new(),
+                    source: format!("git+{}", git_info.url),
+                });
             }
         }
     }
 
-    crate::core::deps::lock::write_lock(
+    write_lock(
         project_root,
         &project_name,
         &project_version,
@@ -98,6 +141,24 @@ pub fn resolve_deps(
     )?;
 
     Ok(resolved)
+}
+
+struct GitDep<'a> {
+    url: &'a str,
+    version: Option<String>,
+}
+
+fn git_dep(value: &toml::Value) -> Option<GitDep<'_>> {
+    if let Some(table) = value.as_table()
+        && let Some(url) = table.get("git").and_then(|v| v.as_str())
+    {
+        let version = table
+            .get("version")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        return Some(GitDep { url, version });
+    }
+    None
 }
 
 fn path_dep_path(value: &toml::Value) -> Option<&str> {

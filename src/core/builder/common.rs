@@ -5,6 +5,10 @@ use std::sync::{Mutex, OnceLock};
 
 static OUTPUT_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 
+pub fn get_output_lock() -> &'static Mutex<()> {
+    OUTPUT_MUTEX.get_or_init(|| Mutex::new(()))
+}
+
 pub fn collect_sources(
     roots: &[PathBuf],
     extensions: &[&str],
@@ -230,10 +234,16 @@ pub fn normalize_source_path(path: &Path) -> String {
 
 pub fn object_path(obj_dir: &Path, source: &str, obj_ext: &str) -> String {
     let src_path = Path::new(source);
-    let rel = src_path
-        .strip_prefix("./src")
-        .or_else(|_| src_path.strip_prefix("src"))
-        .unwrap_or(src_path);
+    let stripped = src_path.strip_prefix("./").unwrap_or(src_path);
+    let rel = stripped
+        .components()
+        .skip(1)
+        .collect::<std::path::PathBuf>();
+    let rel = if rel.components().next().is_some() {
+        rel
+    } else {
+        stripped.to_path_buf()
+    };
     let mut out = obj_dir.join(rel);
     out.set_extension(obj_ext.trim_start_matches('.'));
     out.to_string_lossy().to_string()

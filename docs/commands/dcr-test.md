@@ -6,6 +6,7 @@ Runs the project's test suite.
 
 ```sh
 dcr test
+dcr test --debug
 dcr test --release
 dcr test --target linux
 dcr test --init
@@ -39,6 +40,6 @@ DCR uses a simple test framework:
 
 - Test binary is linked with the main project (for lib projects) or standalone.
 - `--init` creates `tests/dcr_test.h` and `tests/test.c` if missing.
-- Tests run in release mode by default for performance.
+- Tests run in debug mode by default. Use `--release` for release mode.
 - Custom test logic can be added by editing `tests/test.c`.
 - Fails if no `tests/test.c` exists (run `dcr test --init` first).

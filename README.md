@@ -16,7 +16,7 @@ The current implementation is written in Rust.
 - Clean build artifacts
 - Generate IDE integration files (VS Code, CLion) and compilation databases
 - Generate a minimal C project template
-- Build static and shared libraries
+- Build static, shared libraries, UEFI PE32+ executables, and bare-metal ELF executables
 - Dependency management:
   - Git and Path dependencies with `dcr.lock`
   - Registry-based dependency resolution
@@ -154,7 +154,9 @@ You can also set `build.target` to override the output directory (profile-indepe
 You can set `build.platform` to pass `-march=<platform>` (GCC/Clang) or `/arch:*` (MSVC) where supported.
 Use `build.kind = "staticlib"` to build a static library instead of a binary.
 Use `build.kind = "sharedlib"` to build a shared library (`.so`/`.dylib`/`.dll`).
-`dcr run` is only for `build.kind = "bin"` and will fail for libraries.
+Use `build.kind = "efi"` to build a UEFI PE32+ executable (`.efi`).
+Use `build.kind = "elf"` to build a bare-metal ELF executable.
+`dcr run` is only for `build.kind = "bin"` and will fail for libraries, EFI, and ELF.
 Use `build.exclude`/`build.include` to control source/header collection.
 Use `build.roots` and `build.src_disable` to replace the default `src/` root.
 Use `build.steps` and `build.post_steps` to run custom commands.
@@ -203,7 +205,7 @@ type = "app" # or "lib", "none"
 language = "c"
 standard = "c11"
 compiler = "clang"
-kind = "bin" # "bin", "staticlib", "sharedlib"
+kind = "bin" # "bin", "staticlib", "sharedlib", "efi", "elf"
 # Optional platform hint
 # platform = "x86_64"
 # Optional custom flags

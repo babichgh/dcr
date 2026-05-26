@@ -49,7 +49,7 @@ dcr clean --release --all
 
 ## Notes
 
-- `run` is unavailable for `build.kind = "staticlib"` and `build.kind = "sharedlib"`.
+- `run` is unavailable for `build.kind = "staticlib"`, `build.kind = "sharedlib"`, `build.kind = "efi"`, and `build.kind = "elf"`.
 - Build profile flag (`--debug` / `--release`) can be passed in any argument position.
 - Unknown profile flags produce an error.
 - In workspace root, `clean --all` cleans all member projects.
