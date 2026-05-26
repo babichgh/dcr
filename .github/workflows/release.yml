@@ -25,6 +25,10 @@ on:
         description: "Publish to crates.io"
         type: boolean
         default: false
+      run_brew:
+        description: "Update Homebrew tap"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -48,8 +52,8 @@ jobs:
           fi
           VERSION="${TAG#v}"
           [[ "$TAG" == *"-"* ]] && PRERELEASE="true" || PRERELEASE="false"
-          echo "value=${TAG}"         >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}"   >> "$GITHUB_OUTPUT"
+          echo "value=${TAG}"             >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}"       >> "$GITHUB_OUTPUT"
           echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
 
   # ── Release Notes ──────────────────────────────────────────────────────────
@@ -248,3 +252,82 @@ jobs:
 
       - name: Publish to crates.io
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ── Homebrew tap ───────────────────────────────────────────────────────────
+  publish-brew:
+    if: |
+      (github.event_name == 'push' && needs.setup.outputs.prerelease == 'false') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_brew == 'true')
+    needs: [setup, build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets and compute sha256
+        id: sha
+        run: |
+          VERSION="${{ needs.setup.outputs.version }}"
+          BASE="https://github.com/dexoron/dcr/releases/download/v${VERSION}"
+
+          download_sha() {
+            curl -fsSL "${BASE}/$1" | sha256sum | awk '{print $1}'
+          }
+
+          echo "linux_x86=$(download_sha "dcr-x86_64-unknown-linux-gnu-${VERSION}")"     >> "$GITHUB_OUTPUT"
+          echo "linux_arm=$(download_sha "dcr-aarch64-unknown-linux-gnu-${VERSION}")"    >> "$GITHUB_OUTPUT"
+          echo "macos_x86=$(download_sha "dcr-x86_64-apple-darwin-${VERSION}")"          >> "$GITHUB_OUTPUT"
+          echo "macos_arm=$(download_sha "dcr-aarch64-apple-darwin-${VERSION}")"         >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-dexoron
+        uses: actions/checkout@v4
+        with:
+          repository: dexoron/homebrew-dexoron
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update Formula/dcr.rb
+        run: |
+          VERSION="${{ needs.setup.outputs.version }}"
+          cat > Formula/dcr.rb <<FORMULA
+          class Dcr < Formula
+            desc "Cargo-like utility to manage C/C++ projects"
+            homepage "https://dcr.dexoron.su"
+            version "${VERSION}"
+
+            on_macos do
+              on_intel do
+                url "https://github.com/dexoron/dcr/releases/download/v#{version}/dcr-x86_64-apple-darwin-#{version}"
+                sha256 "${{ steps.sha.outputs.macos_x86 }}"
+              end
+              on_arm do
+                url "https://github.com/dexoron/dcr/releases/download/v#{version}/dcr-aarch64-apple-darwin-#{version}"
+                sha256 "${{ steps.sha.outputs.macos_arm }}"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "https://github.com/dexoron/dcr/releases/download/v#{version}/dcr-x86_64-unknown-linux-gnu-#{version}"
+                sha256 "${{ steps.sha.outputs.linux_x86 }}"
+              end
+              on_arm do
+                url "https://github.com/dexoron/dcr/releases/download/v#{version}/dcr-aarch64-unknown-linux-gnu-#{version}"
+                sha256 "${{ steps.sha.outputs.linux_arm }}"
+              end
+            end
+
+            def install
+              bin.install Dir["dcr*"].first => "dcr"
+            end
+
+            test do
+              system "#{bin}/dcr", "--version"
+            end
+          end
+          FORMULA
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/dcr.rb
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "dcr ${{ needs.setup.outputs.version }}"
+          git push
