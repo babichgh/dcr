@@ -199,12 +199,6 @@ jobs:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_bsd == 'true' }}
     needs: [setup, notes]
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-unknown-freebsd
-          # При необходимости сюда можно докинуть x86_64-unknown-netbsd
     steps:
       - uses: actions/checkout@v4
         with:
@@ -221,25 +215,56 @@ jobs:
           pip install cargo-zigbuild
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Setup Rust
+      - name: Setup Rust (FreeBSD)
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: x86_64-unknown-freebsd
 
-      - name: Build
-        run: cargo zigbuild --release --target ${{ matrix.target }}
+      - name: Build FreeBSD
+        run: cargo zigbuild --release --target x86_64-unknown-freebsd
 
-      - name: Prepare Artifact
+      - name: Prepare FreeBSD Artifact
         run: |
-          ASSET="dcr-${{ matrix.target }}-${{ needs.setup.outputs.version }}"
-          cp target/${{ matrix.target }}/release/dcr "$ASSET"
-          echo "ASSET_NAME=${ASSET}" >> "$GITHUB_ENV"
+          ASSET="dcr-x86_64-unknown-freebsd-${{ needs.setup.outputs.version }}"
+          cp target/x86_64-unknown-freebsd/release/dcr "$ASSET"
+          echo "FREEBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
 
-      - name: Upload Release Asset
+          - name: Build in OpenBSD VM
+        uses: vmactions/openbsd-vm@v1
+        with:
+          usesh: true
+          run: |
+            pkg_add rust
+            cargo build --release
+
+      - name: Prepare OpenBSD Artifact
+        run: |
+          ASSET="dcr-x86_64-unknown-openbsd-${{ needs.setup.outputs.version }}"
+          cp target/release/dcr "$ASSET"
+          echo "OPENBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
+
+      - name: Build in NetBSD VM
+        uses: vmactions/netbsd-vm@v1
+        with:
+          usesh: true
+          run: |
+            pkgin -y install rust
+            cargo build --release
+
+      - name: Prepare NetBSD Artifact
+        run: |
+          ASSET="dcr-x86_64-unknown-netbsd-${{ needs.setup.outputs.version }}"
+          cp target/release/dcr "$ASSET"
+          echo "NETBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
+
+      - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.setup.outputs.tag }}
-          files: ${{ env.ASSET_NAME }}
+          files: |
+            ${{ env.FREEBSD_ASSET }}
+            ${{ env.OPENBSD_ASSET }}
+            ${{ env.NETBSD_ASSET }}
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
