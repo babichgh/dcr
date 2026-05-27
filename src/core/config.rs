@@ -100,6 +100,8 @@ pub struct PackageConfig {
 pub struct BuildConfig {
     pub language: LanguageConfig,
     pub standard: String,
+    #[serde(default)]
+    pub cxx_standard: Option<String>,
     pub compiler: String,
     #[serde(default)]
     pub kind: Option<String>,

@@ -27,7 +27,7 @@ pub struct BuildContext<'a> {
     pub compiler: &'a str,
     pub language: &'a str,
     pub standard: &'a str,
-    #[allow(dead_code)]
+    pub cxx_standard: &'a str,
     pub target: Option<&'a str>,
     pub target_dir: Option<&'a str>,
     pub kind: &'a str,

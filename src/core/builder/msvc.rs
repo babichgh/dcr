@@ -144,8 +144,8 @@ pub(crate) fn collect_sources(ctx: &BuildContext) -> Result<Vec<String>, String>
 
 fn source_extensions(language: &str) -> Vec<&str> {
     let mut out = Vec::new();
-    for part in language.split('+') {
-        let lang = part.trim().to_lowercase();
+    for part in language.split(',').map(|s| s.trim()) {
+        let lang = part.to_lowercase();
         match lang.as_str() {
             "c" => out.extend(["c"]),
             "c++" | "cpp" | "cxx" => out.extend(["cpp", "cxx", "cc"]),
@@ -243,18 +243,26 @@ fn build_object(
     let mut cmd = Command::new(compiler);
     cmd.arg("/nologo");
 
-    match ctx.language.to_lowercase().as_str() {
-        "c" => {
-            cmd.arg("/TC");
-        }
-        "c++" | "cpp" | "cxx" => {
-            cmd.arg("/TP");
-        }
-        _ => return Err("Unsupported language".to_string()),
+    let ext = Path::new(source)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    let is_cpp = matches!(ext, "cpp" | "cxx" | "cc");
+    if is_cpp {
+        cmd.arg("/TP");
+    } else {
+        cmd.arg("/TC");
     }
 
-    if !ctx.standard.is_empty() && ctx.language.to_lowercase() != "asm" {
-        let std_flag = msvc_standard_flag(ctx.language, ctx.standard)?;
+    let std_val = if is_cpp && !ctx.cxx_standard.is_empty() {
+        ctx.cxx_standard
+    } else if !is_cpp && !ctx.standard.is_empty() {
+        ctx.standard
+    } else {
+        ""
+    };
+    if !std_val.is_empty() {
+        let std_flag = msvc_standard_flag(if is_cpp { "c++" } else { "c" }, std_val)?;
         cmd.arg(std_flag);
     }
 

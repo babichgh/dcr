@@ -171,6 +171,7 @@ pub struct ProjectInfo {
     pub profile: String,
     pub language: String,
     pub standard: String,
+    pub cxx_standard: String,
     pub compiler: String,
     pub kind: String,
     pub sources: Vec<String>,
@@ -228,6 +229,7 @@ fn collect_project_info_inner(root: &Path, profile: &str) -> Result<ProjectInfo,
     let version = get_config_str(&config, "package.version");
     let language = get_language_with_profile_or_default(&config, profile);
     let standard = get_string_with_profile(&config, "standard", profile);
+    let cxx_standard = get_string_with_profile(&config, "cxx_standard", profile);
     let compiler_s = get_string_with_profile(&config, "compiler", profile);
     let kind = get_string_with_profile(&config, "kind", profile);
     let build_target = get_string_with_profile(&config, "target", profile);
@@ -339,6 +341,7 @@ fn collect_project_info_inner(root: &Path, profile: &str) -> Result<ProjectInfo,
         compiler: &resolved_compiler,
         language: &language,
         standard: &standard,
+        cxx_standard: &cxx_standard,
         target: Some(build_target.as_str()),
         target_dir: target_dir_binding.as_deref(),
         kind: normalize_kind(&kind),
@@ -381,6 +384,7 @@ fn collect_project_info_inner(root: &Path, profile: &str) -> Result<ProjectInfo,
         profile: profile.to_string(),
         language,
         standard,
+        cxx_standard,
         compiler: resolved_compiler,
         kind: normalize_kind(&kind).to_string(),
         sources: abs_sources,
@@ -470,6 +474,10 @@ fn project_info_to_json(info: &ProjectInfo) -> String {
     out.push_str(&format!(
         "    \"standard\": {},\n",
         json_str(&info.standard)
+    ));
+    out.push_str(&format!(
+        "    \"cxx_standard\": {},\n",
+        json_str(&info.cxx_standard)
     ));
     out.push_str(&format!(
         "    \"compiler\": {},\n",
@@ -575,6 +583,13 @@ fn build_compile_command(info: &ProjectInfo, source: &str, profile: &str) -> Vec
     };
     cmd.push(compiler.to_string());
     cmd.push("-c".to_string());
+
+    // ASM x flag — must be before source file
+    if let Some(flag) = asm_lang_flag(source) {
+        cmd.push("-x".to_string());
+        cmd.push(flag.to_string());
+    }
+
     cmd.push(source.to_string());
 
     // Object path (for -o, approximate — not critical for IntelliSense)
@@ -595,15 +610,18 @@ fn build_compile_command(info: &ProjectInfo, source: &str, profile: &str) -> Vec
         cmd.push("-fPIC".to_string());
     }
 
-    // ASM x flag
-    if let Some(flag) = asm_lang_flag(source) {
-        cmd.push("-x".to_string());
-        cmd.push(flag.to_string());
-    }
-
     // -std=
     if !info.standard.is_empty() && info.language.to_lowercase() != "asm" {
-        cmd.push(format!("-std={}", info.standard));
+        let ext = Path::new(source)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        let is_cpp = matches!(ext, "cpp" | "cxx" | "cc");
+        if is_cpp && !info.cxx_standard.is_empty() {
+            cmd.push(format!("-std={}", info.cxx_standard));
+        } else if !is_cpp {
+            cmd.push(format!("-std={}", info.standard));
+        }
     }
 
     // Default profile flags (mirrors unix_cc.rs defaults)

@@ -25,7 +25,7 @@ use std::time::Instant;
 
 pub fn build(ctx: &BuildContext) -> Result<f64, String> {
     let lang = ctx.language.to_lowercase();
-    if lang.split('+').any(|p| p.trim() != "asm") {
+    if lang.split(',').any(|p| p.trim() != "asm") {
         return Err("GAS backend requires build.language = \"asm\"".to_string());
     }
     let assembler = if ctx.compiler.is_empty() {

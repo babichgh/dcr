@@ -31,7 +31,9 @@ kind = "bin"
 
 - `language` (string or array, required): `c`, `c++`, `cpp`, `cxx`, or `asm`.
   Mixed languages can be specified as an array, for example `["c", "c++", "asm"]`.
-- `standard` (string, required): language standard passed to compiler.
+- `standard` (string, required): C language standard passed to compiler (e.g. `c11`, `c17`, `gnu11`).
+- `cxx_standard` (string, optional): C++ language standard passed to compiler for `.cpp`/`.cxx`/`.cc` files
+  (e.g. `c++17`, `gnu++17`, `c++20`). When set, overrides `standard` for C++ sources.
 - `compiler` (string, required): compiler command (for example `clang`, `gcc`, `cl`).
 - `kind` (string, required): `bin`, `staticlib`, `sharedlib`, `efi`, or `elf`.
 - `filename` (string, optional): custom output filename (without extension). Overrides `package.name` for the final artifact.
@@ -42,7 +44,9 @@ kind = "bin"
   When set, DCR automatically injects `--target=<value>` into `cflags` (useful for clang cross-compilation).
 - `platform` (string, optional): architecture hint for compiler (used for `-march` or `/arch`).
 - `cflags` (string array, optional): extra compile flags.
+  Supports variable substitution — see [Variable substitution](#variable-substitution) below.
 - `ldflags` (string array, optional): extra link flags.
+  Supports variable substitution — see [Variable substitution](#variable-substitution) below.
 - `ldscript` (string, optional): linker script path. Passed as `-T <path>` to the linker. Useful for bare-metal/embedded/freestanding targets.
 - `exclude` (string array, optional): paths or glob patterns to skip during source/header collection.
 - `include` (string array, optional): allowlist paths or globs that override `exclude`.
@@ -60,9 +64,30 @@ Notes for `exclude`/`include`:
 - Use `include` to re-allow nested paths, for example exclude `src/boot` but allow `src/boot/arch/**`.
 When using glob patterns in `exclude`, DCR converts them internally, so `exclude` globs still work as expected.
 
-### Build steps
+### Variable substitution
 
-Build steps run shell commands before compilation. Post steps run after linking.
+`cflags`, `ldflags`, and `include` directory entries support the same `{placeholder}` variables
+as build/post steps:
+
+| Variable | Description |
+|---|---|
+| `{profile}` | Build profile (`debug` / `release`) |
+| `{name}` | Package name |
+| `{version}` | Full package version (e.g. `0.2.1`) |
+| `{version_major}` | Major version number |
+| `{version_minor}` | Minor version number |
+| `{version_patch}` | Patch version number |
+| `{version_suffix}` | Version suffix (e.g. `-rc1`) |
+| `{version_suffix_dash}` | Suffix with leading dash (or empty) |
+
+Example:
+
+```toml
+[build]
+cflags = ['-DPROJECT_VERSION="{version}"', '-DVERSION_MAJOR={version_major}']
+```
+
+## Build steps
 
 ```toml
 [[build.steps]]

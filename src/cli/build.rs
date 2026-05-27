@@ -230,11 +230,18 @@ fn get_list_with_profile_and_target(
     // Custom from target/profile
     if let Some(val) = get_config_value_raw(config, "build", field, profile, target) {
         if let Some(_arr) = val.as_array() {
-            let custom = parse_string_array(&val, &format!("build.{field}"))?;
-            if inherit {
-                out.extend(custom);
-            } else {
-                out = custom;
+            let is_base = inherit
+                && config
+                    .get(&format!("build.{field}"))
+                    .map(|v| v == &val)
+                    .unwrap_or(false);
+            if !is_base {
+                let custom = parse_string_array(&val, &format!("build.{field}"))?;
+                if inherit {
+                    out.extend(custom);
+                } else {
+                    out = custom;
+                }
             }
         }
     } else if inherit {
@@ -513,6 +520,8 @@ fn build_project_at(
         let build_language = get_language_with_profile(&config, profile)?;
         let build_standard =
             get_string_with_profile_and_target(&config, "standard", profile, build_target);
+        let build_cxx_standard =
+            get_string_with_profile_and_target(&config, "cxx_standard", profile, build_target);
         let build_kind = get_string_with_profile_and_target(&config, "kind", profile, build_target);
         let build_platform =
             get_string_with_profile_and_target(&config, "platform", profile, build_target);
@@ -716,12 +725,29 @@ fn build_project_at(
         }
 
         let target_dir_binding = normalize_target(build_target.unwrap_or(""), profile);
+        let version_info = parse_version_info(&project_version);
+        let substitute = |s: &str| -> String {
+            s.replace("{profile}", profile)
+                .replace("{name}", &project_name)
+                .replace("{version}", &version_info.full)
+                .replace("{version_major}", &version_info.major)
+                .replace("{version_minor}", &version_info.minor)
+                .replace("{version_patch}", &version_info.patch)
+                .replace("{version_suffix}", &version_info.suffix)
+                .replace("{version_suffix_dash}", &version_info.suffix_dash)
+        };
+        let resolved_cflags: Vec<String> = resolved_cflags.iter().map(|f| substitute(f)).collect();
+        let modified_ldflags: Vec<String> =
+            resolved_ldflags.iter().map(|f| substitute(f)).collect();
+        let merged_include_dirs: Vec<String> =
+            merged_include_dirs.iter().map(|f| substitute(f)).collect();
         let ctx = BuildContext {
             profile,
             project_name: &project_name,
             compiler: &resolved_compiler,
             language: &build_language,
             standard: &build_standard,
+            cxx_standard: &build_cxx_standard,
             target: build_target,
             target_dir: target_dir_binding.as_deref(),
             kind: normalize_kind(&build_kind),
@@ -740,7 +766,7 @@ fn build_project_at(
             lib_dirs: &resolved.lib_dirs,
             libs: &resolved.libs,
             cflags: &resolved_cflags,
-            ldflags: &resolved_ldflags,
+            ldflags: &modified_ldflags,
             output_filename: if output_filename.is_empty() {
                 None
             } else {
@@ -763,7 +789,6 @@ fn build_project_at(
         let tool_execs = resolve_toolchain_execs(&tc_uic, &tc_moc, &tc_rcc, &pkg_configs);
         let step_flags =
             build_step_flags(&resolved_cflags, &resolved.include_dirs, &resolved_compiler);
-        let version_info = parse_version_info(&project_version);
         let step_vars = StepVars {
             profile,
             version: &version_info.full,

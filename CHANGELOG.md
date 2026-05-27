@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.6.8] - 2026-05-27
+
+Added:
+
+- `build.cxx_standard` — separate C++ language standard for `.cpp`/`.cxx`/`.cc` files.
+  When set, overrides `build.standard` for C++ sources. Example:
+
+  ```toml
+  [build]
+  language = ["c", "c++"]
+  standard = "gnu11"
+  cxx_standard = "gnu++17"
+  ```
+
+- Variable substitution for `cflags`, `ldflags`, and `include` directory entries.
+  All `{version}`, `{version_major}`, `{name}`, `{profile}` and other step variables
+  are now available. Example:
+
+  ```toml
+  [build]
+  cflags = ['-DPROJECT_VERSION="{version}"']
+  ```
+
+- FreeBSD build support in CI — new `run_bsd` workflow input and `build-bsd` job
+  that cross-compiles `x86_64-unknown-freebsd` via `cargo-zigbuild`.
+
+Changed:
+
+- License changed from MIT to **GPL-3.0-or-later**. All source files now carry
+  the GPL-3.0 header. Default license in `dcr new` / `dcr init` changed to
+  `"GPL-3.0-or-later"`. README, FAQ, and CONTRIBUTING.md updated accordingly.
+- `get_list_with_profile_and_target` no longer duplicates list values when
+  `inherit = true` and the profile/target value is identical to the base value.
+
+Fixed:
+
+- Multi-language `language` array (e.g. `["c", "c++", "asm"]`) no longer drops `c++`
+  during internal parsing — `.cxx`/`.cpp`/`.cc` source files are correctly discovered
+  and compiled.
+- `-std=` flag is no longer passed to C++ files when only `standard` (C standard) is
+  configured — uses `cxx_standard` when available, otherwise skips `-std=` for C++
+  sources, avoiding clang error `invalid argument '-std=c11' not allowed with 'C++'`.
+- Object file collision: source files with the same stem but different extensions
+  (e.g. `gdt.cxx` and `gdt.S`) no longer overwrite each other. Object filenames
+  now include the original source extension (e.g. `gdt.cxx.o`, `gdt.S.o`).
+- MSVC backend compile step now detects language per source file extension instead
+  of using the global `language` field, fixing mixed C/C++ compilation with MSVC.
+- Assembler `-x` flag in `unix_cc.rs` and `gen.rs` is now placed **before** the
+  source file, as required by clang/gcc.
+- `{version}` variables in `build.clean` are now correctly substituted.
+
 ## [0.6.7] - 2026-05-26
 
 Added:

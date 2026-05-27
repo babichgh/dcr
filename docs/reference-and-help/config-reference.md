@@ -4,88 +4,131 @@
 
 ```toml
 [package]
-name = "string"      # required
-version = "string"   # required
+name        = "string"            # required
+version     = "string"            # required
+type        = "string"            # optional: "app", "lib", "none"
+description = "string"            # optional
+author      = "string"            # optional
+authors     = ["string", "..."]   # optional
+license     = "string"            # optional
+homepage    = "string"            # optional
+repository  = "string"            # optional
+readme      = "string"            # optional
+keywords    = ["string", "..."]   # optional
+categories  = ["string", "..."]   # optional
 
 [build]
-language = "c|c++|cpp|cxx|asm"     # required (string or array)
-standard = "string"            # required
-compiler = "string"            # required
-kind = "bin|staticlib|sharedlib"         # required
-filename = "string"            # optional (custom output name without extension)
-extension = "string"           # optional (custom extension without dot, e.g. "BIN")
-target = "string"              # optional
-platform = "string"            # optional
-cflags = ["string", "..."]     # optional
-ldflags = ["string", "..."]    # optional
-ldscript = "string"            # optional (linker script, passed as -T<path>)
-exclude = ["string", "..."]    # optional
-include = ["string", "..."]    # optional
-roots = ["string", "..."]      # optional
-src_disable = false            # optional
-pkg_config = ["string", "..."] # optional
-generated = ["string", "..."]  # optional
-expect = ["string", "..."]     # optional
-clean = ["string", "..."]      # optional
+language     = "c|c++|cpp|cxx|asm"               # required (string or array)
+standard     = "string"                          # required (e.g. "c11", "gnu11")
+cxx_standard = "string"                          # optional (e.g. "c++17", "gnu++17")
+compiler     = "string"                          # required (e.g. "clang", "gcc")
+kind         = "bin|staticlib|sharedlib|efi|elf" # required
+target       = "string"                          # optional (cross-compilation target triple)
+platform     = "string"                          # optional (architecture hint, -march)
+type         = "string"                          # optional
+cflags       = ["string", "..."]                 # optional (supports {version} etc.)
+ldflags      = ["string", "..."]                 # optional (supports {version} etc.)
+ldscript     = "string"                          # optional (linker script path)
+exclude      = ["string", "..."]                 # optional (glob patterns)
+include      = ["string", "..."]                 # optional (allowlist + -I dirs)
+roots        = ["string", "..."]                 # optional (source roots)
+src_disable  = false                             # optional (disable default src/)
+pkg_config   = ["string", "..."]                 # optional (pkg-config packages)
+generated    = ["string", "..."]                 # optional (generated file patterns)
+expect       = ["string", "..."]                 # optional (expected artifact patterns)
+clean        = ["string", "..."]                 # optional (extra clean paths)
+targets      = ["string", "..."]                 # optional (build targets)
+filename     = "string"                          # optional (custom output name)
+extension    = "string"                          # optional (custom extension)
+inherit      = true                              # optional (inherit base settings)
 
 [[build.steps]]
-name = "string"
-in = "glob"
-out = "path or glob"
-cmd = "string"
+name = "string"    # required
+in   = "glob"      # required
+out  = "path"      # required
+cmd  = "string"    # required
+
+# Inline steps (equivalent to [[build.steps]])
+steps = [
+  { name = "string", in = "glob", out = "path", cmd = "string" },
+]
 
 [[build.post_steps]]
-name = "string"
-in = "glob"
-out = "path or glob"
-cmd = "string"
+name = "string"    # required
+in   = "glob"      # required (or "target/...")
+out  = "path"      # required
+cmd  = "string"    # required
 
-# Inline array form (equivalent to [[build.steps]] / [[build.post_steps]])
-steps = [
-  { name = "string", in = "glob", out = "path or glob", cmd = "string" },
-]
+# Inline post_steps (equivalent to [[build.post_steps]])
 post_steps = [
-    { name = "string", in = "glob", out = "path or glob", cmd = "string" },
+  { name = "string", in = "glob", out = "path", cmd = "string" },
 ]
 
+# Profile overrides (inherit all from [build])
 [build.debug]
-cflags = ["string", "..."]     # optional
-ldflags = ["string", "..."]    # optional
+cflags  = ["string", "..."]  # optional
+ldflags = ["string", "..."]  # optional
 
 [build.release]
-cflags = ["string", "..."]     # optional
-ldflags = ["string", "..."]    # optional
+cflags  = ["string", "..."]  # optional
+ldflags = ["string", "..."]  # optional
+
+# Target-specific overrides
+[build.linux]
+compiler = "string"
+cflags   = ["string", "..."]
+
+[build.windows]
+compiler = "string"
+
+# Target + profile override
+[build.linux.release]
+cflags = ["string", "..."]
 
 [toolchain]
-cc = "string"   # optional
-cxx = "string"  # optional
-as = "string"   # optional
-ar = "string"   # optional
-ld = "string"   # optional
-uic = "string"  # optional
-moc = "string"  # optional
-rcc = "string"  # optional
+cc  = "string"  # optional (C compiler override)
+cxx = "string"  # optional (C++ compiler override)
+as  = "string"  # optional (assembler override)
+ar  = "string"  # optional (archiver override)
+ld  = "string"  # optional (linker override)
+uic = "string"  # optional (Qt uic)
+moc = "string"  # optional (Qt moc)
+rcc = "string"  # optional (Qt rcc)
 
 [run]
-cmd = "string"  # optional
+cmd = "string"  # required for `dcr run`
+
+# Debug run variant
+[run.debug]
+cmd = "string"
 
 [workspace]
-name = { path = "string", deps = ["string", "..."] }
+[workspace.member_name]
+path = "string"             # required
+deps = ["string", "..."]    # optional
 
 [dependencies]
-name = {
-  path = "string",              # required for each dependency
-  include = ["string", "..."],  # optional
-  lib = ["string", "..."],      # optional
-  libs = ["string", "..."],     # optional
-}
+[dependencies.dep_name]
+path    = "string"          # local path
+# or
+version = "string"          # registry version
+# or
+git     = "string"          # git URL
+branch  = "string"          # optional (git branch)
+tag     = "string"          # optional (git tag)
+rev     = "string"          # optional (git commit)
+# common fields:
+include = ["string", "..."] # optional (include dirs)
+lib     = ["string", "..."] # optional (lib dirs)
+libs    = ["string", "..."] # optional (link libs)
+features = ["string", "..."] # optional (registry features)
 ```
 
 ## Validation rules
 
 - `[package]`, `[build]`, `[dependencies]` must exist.
 - Required string fields must be non-empty.
-- `build.kind` must be `bin`, `staticlib`, or `sharedlib`.
+- `build.kind` must be `bin`, `staticlib`, `sharedlib`, `efi`, or `elf`.
 - Dependency fields `include/lib/libs` must be string arrays when provided.
 - `build.exclude`/`build.include` must be string arrays when provided.
 - `build.roots` must be a string array when provided.

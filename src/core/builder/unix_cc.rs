@@ -133,8 +133,8 @@ pub(crate) fn collect_sources(ctx: &BuildContext) -> Result<Vec<String>, String>
 
 fn source_extensions(language: &str) -> Vec<&str> {
     let mut out = Vec::new();
-    for part in language.split('+') {
-        let lang = part.trim().to_lowercase();
+    for part in language.split(',').map(|s| s.trim()) {
+        let lang = part.to_lowercase();
         match lang.as_str() {
             "c" => out.extend(["c"]),
             "c++" | "cpp" | "cxx" => out.extend(["cpp", "cxx", "cc"]),
@@ -210,14 +210,16 @@ fn build_object(
     }
 
     let mut cmd = Command::new(compiler);
-    cmd.arg("-c").arg(source).arg("-o").arg(obj_path);
-
-    if ctx.kind == "sharedlib" {
-        cmd.arg("-fPIC");
-    }
+    cmd.arg("-c");
 
     if let Some(flag) = asm_lang_flag(source) {
         cmd.arg("-x").arg(flag);
+    }
+
+    cmd.arg(source).arg("-o").arg(obj_path);
+
+    if ctx.kind == "sharedlib" {
+        cmd.arg("-fPIC");
     }
 
     if let Some(platform) = ctx.platform
@@ -227,7 +229,16 @@ fn build_object(
     }
 
     if !ctx.standard.is_empty() && ctx.language.to_lowercase() != "asm" {
-        cmd.arg(format!("-std={}", ctx.standard));
+        let ext = Path::new(source)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        let is_cpp = matches!(ext, "cpp" | "cxx" | "cc");
+        if is_cpp && !ctx.cxx_standard.is_empty() {
+            cmd.arg(format!("-std={}", ctx.cxx_standard));
+        } else if !is_cpp {
+            cmd.arg(format!("-std={}", ctx.standard));
+        }
     }
 
     let use_dcr_defaults = ctx.cflags.is_empty() && !is_bare_metal_target(ctx.target);

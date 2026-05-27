@@ -190,7 +190,7 @@ pub fn parse_language_value(value: &toml::Value, key: &str) -> Result<String, St
     if parts.is_empty() {
         return Err(format!("{key} is empty"));
     }
-    Ok(parts.join("+"))
+    Ok(parts.join(","))
 }
 
 pub fn resolve_compiler(
@@ -258,7 +258,7 @@ fn toolchain_override_compiler(
 
 pub fn primary_language(language: &str) -> String {
     let parts: Vec<String> = language
-        .split('+')
+        .split(',')
         .map(|p| p.trim().to_lowercase())
         .filter(|p| !p.is_empty())
         .collect();

@@ -1,283 +1,208 @@
-# DCR (Dexoron Cargo Realization)
+<div align="center">
 
-DCR is a utility for managing C/C++ projects in a Cargo-like style.
-Created and maintained by **Dexoron (Bezotechestvo Vladimir)**.
+# DCR — Dexoron Cargo Realization
 
-The current implementation is written in Rust.
+**A Cargo-style build tool for C/C++ projects**
 
-## Why DCR
+[![CI](https://github.com/dexoron/dcr/actions/workflows/ci.yml/badge.svg)](https://github.com/dexoron/dcr/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/dexoron/dcr)](https://github.com/dexoron/dcr/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)](https://github.com/dexoron/dcr/releases)
+<br/>
+[![AUR](https://img.shields.io/aur/version/dcr)](https://aur.archlinux.org/packages/dcr)
+[![Crates.io](https://img.shields.io/crates/v/dcr)](https://crates.io/crates/dcr)
+[![Homebrew](https://img.shields.io/badge/homebrew-dexoron%2Fdexoron-orange)](https://github.com/dexoron/homebrew-dexoron)
+<br/>
+[![GitHub Stars](https://img.shields.io/github/stars/dexoron/dcr?style=flat)](https://github.com/dexoron/dcr/stargazers)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-- Unified project structure without manual setup
-- Simple commands for common tasks
-- Transparent compilation and predictable build profiles
+</div>
 
-## Features
+---
 
-- Create a new project or initialize the current directory
-- Build a project with `debug` and `release` profiles
-- Run the compiled binary
-- Clean build artifacts
-- Generate IDE integration files (VS Code, CLion) and compilation databases
-- Generate a minimal C project template
-- Build static, shared libraries, UEFI PE32+ executables, and bare-metal ELF executables
-- Dependency management:
-  - Git and Path dependencies with `dcr.lock`
-  - Registry-based dependency resolution
-- Library packaging functionality (auto-generate `include/` and `lib/` for `type = "lib"` packages)
-- ASM projects with NASM/GAS or via GCC/Clang
-- Mixed language projects
-- Cross-compilation with `--target` (full triple support and short names)
-- Target-specific configurations and inheritance
-- Update the binary via `dcr --update` (GitHub Releases)
+## Why DCR?
 
-## Supported Platforms
+- **No boilerplate** — one config file, predictable structure
+- **Cargo-like workflow** — `build`, `run`, `clean`, `test`, `add`
+- **Cross-compilation** — full target triple support with short names
+- **IDE integration** — VS Code, CLion, `compile_commands.json` out of the box
+- **Dependencies** — path, git, and registry-based with lock file
 
-- Linux: x86_64/aarch64 (GNU and Musl)
-- macOS: x86_64/aarch64
-- Windows: x86_64/aarch64 (MSVC, GNU, LLVM)
+---
 
 ## Installation
 
-### Package Manager
-
-**Arch Linux**
-
-```sh
-yay -S dcr # or paru and other AUR package managers
-```
-
-### From Source
+<table>
+<tr>
+<td><b>Arch Linux (AUR)</b></td>
+<td>
 
 ```sh
-git clone https://github.com/dexoron/dcr.git
-cd dcr
-cargo build --release
-mkdir -p ~/.local/bin
-ln -sf "$PWD/target/release/dcr" ~/.local/bin/dcr
+yay -S dcr
 ```
 
-### Via `install.sh` (Linux/macOS)
+</td>
+</tr>
+<tr>
+<td><b>macOS/Linux(GNU) (Homebrew)</b></td>
+<td>
+
+```sh
+brew tap dexoron/dexoron
+brew install dcr
+```
+
+</td>
+</tr>
+<tr>
+<td><b>Cargo (crates.io)</b></td>
+<td>
+
+```sh
+cargo install dcr
+```
+
+</td>
+</tr>
+<tr>
+<td><b>Linux / macOS (script)</b></td>
+<td>
 
 ```sh
 curl -fsSL https://dcr.dexoron.su/install.sh | bash
 ```
 
-### Via `install.ps1` (Windows)
+</td>
+</tr>
+<tr>
+<td><b>Windows (PowerShell)</b></td>
+<td>
 
 ```powershell
 irm https://dcr.dexoron.su/install.ps1 | iex
 ```
 
-When executed, both scripts ask whether to:
+</td>
+</tr>
+<tr>
+<td><b>From source</b></td>
+<td>
 
-- download a prebuilt binary from GitHub Releases
-- or build the project from `git`
+```sh
+git clone https://github.com/dexoron/dcr.git
+cd dcr && cargo build --release
+ln -sf "$PWD/target/release/dcr" ~/.local/bin/dcr
+```
 
-Release assets:
+</td>
+</tr>
+</table>
 
-- `dcr-x86_64-unknown-linux-gnu`
-- `dcr-x86_64-apple-darwin`
-- `dcr-aarch64-apple-darwin`
-- `dcr-x86_64-pc-windows-msvc.exe`
-
-## Update
-
-- If DCR was installed from GitHub release assets, `install.sh`, `install.ps1`, or built manually:
-  - use `dcr --update`
-- If DCR is installed via `pacman/AUR`:
-  - update with your package manager: `paru/yay -Syu dcr` or `sudo pacman -Syu dcr`
-  - `dcr --update` detects package-managed installs and asks you to update via package manager
+---
 
 ## Quick Start
 
-Create a new project:
-`dcr new hello`
-
-Or initialize the current directory (the directory must be empty):
-`dcr init`
-
-Project structure:
-
-```txt
-hello/
-- src/
-- - main.c
-- dcr.toml
-```
-
-Build and run the project:
-`dcr run` or `dcr run --release`
-
-## Commands
-
-### `dcr new <name>`
-
-Creates a project with the specified name in the current directory.
-
-### `dcr init`
-
-Creates a project in the current directory. The project name is taken from the directory name. The directory must be empty.
-
-### `dcr setup`
-
-Initializes the registry system by reading `~/.dcr/config.toml` and verifying the availability of configured indices.
-
-### `dcr add <name> <source>`
-
-Adds a dependency to `dcr.toml`.
-If a registry is configured, `dcr` automatically finds the package.
-Git/Path syntax: `path:`, `github:`, `gitlab:`, `git:`, or a full URL.
-Use `--branch`, `--tag`, or `--rev` for Git dependencies.
-
-### `dcr build [profile]`
-
-Builds the project. If no profile is specified, `--debug` is used.
-Use `--force` to rebuild without cache, `--clean` to clean before build.
-
-### `dcr run [profile]`
-
-Builds the project and runs the binary. If no profile is specified, `--debug` is used.
-Use `--force` to rebuild without cache, `--clean` to clean before build.
-
-Run manually:
-`./target/<profile>/<name>`
-
-### `dcr clean`
-
-Removes the `target` directory in the project root.
-Use `dcr clean --all` in a workspace root to clean all member projects.
-
-### `dcr gen`
-
-Generates IDE integration files and build tools.
-
-- `dcr gen vscode`: VS Code workspace config
-- `dcr gen clion`: CLion project files
-- `dcr gen compile-commands`: `compile_commands.json` for clang tools
-
-### `dcr test`
-
-Runs the test suite.
-Use `dcr test --init` to create test files.
-
-## Build Profiles
-
-Two profiles are supported:
-
-- `--debug` (default) - built-in flags per compiler
-- `--release` - built-in flags per compiler
-
-Custom flags can be added in `dcr.toml` via `build.cflags` and `build.ldflags`.
-Profile-specific flags can be added via `[build.debug]` and `[build.release]`.
-You can also set `build.target` to override the output directory (profile-independent).
-You can set `build.platform` to pass `-march=<platform>` (GCC/Clang) or `/arch:*` (MSVC) where supported.
-Use `build.kind = "staticlib"` to build a static library instead of a binary.
-Use `build.kind = "sharedlib"` to build a shared library (`.so`/`.dylib`/`.dll`).
-Use `build.kind = "efi"` to build a UEFI PE32+ executable (`.efi`).
-Use `build.kind = "elf"` to build a bare-metal ELF executable.
-`dcr run` is only for `build.kind = "bin"` and will fail for libraries, EFI, and ELF.
-Use `build.exclude`/`build.include` to control source/header collection.
-Use `build.roots` and `build.src_disable` to replace the default `src/` root.
-Use `build.steps` and `build.post_steps` to run custom commands.
-Use `build.clean` for extra cleanup paths and `[run].cmd` to override run command.
-
-## Cross-compilation
-
-DCR supports cross-compilation via `--target <triple>` or short names:
-
 ```sh
-dcr build --target linux --release    # x86_64-unknown-linux-gnu
-dcr build --target macos --release    # x86_64-apple-darwin
-dcr build --target windows --release  # x86_64-pc-windows-msvc
-dcr run --target aarch64-linux-gnu
+dcr new hello
+cd hello
+dcr run
 ```
 
-Configure multiple targets and target-specific settings in `dcr.toml`:
+**Project structure:**
 
-```toml
-[build.targets]
-targets = ["linux", "windows"]
-
-[build.linux]
-compiler = "gcc"
-cflags = ["-O2"]
-
-[build.windows]
-compiler = "x86_64-w64-mingw32-gcc"
+```
+hello/
+├── dcr.toml       # project config
+└── src/
+    └── main.c
 ```
 
-See [Cross-compilation guide](docs/dependencies-and-build/cross-compilation.md) for details.
+---
 
-## Configuration
-
-The main project file is `dcr.toml`.
-For multi-registry management, use `~/.dcr/config.toml`.
-
-Example `dcr.toml`:
+## dcr.toml Example
 
 ```toml
 [package]
 name = "hello"
 version = "0.1.0"
-type = "app" # or "lib", "none"
 
 [build]
 language = "c"
 standard = "c11"
 compiler = "clang"
-kind = "bin" # "bin", "staticlib", "sharedlib", "efi", "elf"
-# Optional platform hint
-# platform = "x86_64"
-# Optional custom flags
-cflags = ["-Wall", "-Wextra"]
-ldflags = ["-lm"]
-#
-# Optional include/exclude:
-# exclude = ["src/vendor", "src/legacy/**"]
-# include = ["src/boot/arch/**"]
-
-[toolchain]
-# Optional tool overrides:
-# cc = "clang"
-# cxx = "clang++"
-# as = "as"
-# ar = "ar"
-# ld = "ld"
-# uic = "uic"
-# moc = "moc"
-# rcc = "rcc"
+kind = "bin"
 
 [dependencies]
-my_lib = "path:./libs/my_lib"
-cool_lib = { git = "https://github.com/user/cool_lib", tag = "v1.0" }
 ```
 
-Workspace example:
-...
-[workspace]
-kernel = { path = "src/kernel", deps = ["core", "userspace"] }
-core = { path = "src/core", deps = ["userspace"] }
-userspace = { path = "src/userspace" }
+---
 
+## Base Commands
+
+| Command | Description |
+|---|---|
+| `dcr new <name>` | Create a new project |
+| `dcr init` | Initialize current directory |
+| `dcr build [--release]` | Build the project |
+| `dcr run [--release]` | Build and run |
+| `dcr clean` | Remove build artifacts |
+
+other in [docs/](docs/) and `dcr --help`
+
+---
+
+## Platforms
+
+<div align="center">
+
+| OS | x86_64 | aarch64 | armv7 | i686 | riscv64 | GNU | Musl | MSVC | MinGW |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Linux   | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| macOS   | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Windows | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| FreeBSD | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ | ❌ |
+| OpenBSD | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ | ❌ |
+| NetBSD  | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ | ❌ |
+
+✅ officially supported · ⚠️ community / best-effort · ❌ not supported
+
+</div>
+
+---
+
+## Documentation
+
+Full docs at **[dcr.dexoron.su](https://dcr.dexoron.su)** or in the [`docs/`](docs/) directory.
+
+---
+
+## Contributors
+
+<div align="center">
+
+| | Name | Role | GitHub |
+|:---:|---|---|---|
+| 👤 | Dexoron (Bezotechestvo Vladimir) | Maintainer, Creator | [@dexoron](https://github.com/dexoron) |
+| 👤 | Kai | Maintainer | [@peoplemiau1](https://github.com/peoplemiau1) |
+
+</div>
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Before a PR:
+
+```sh
+cargo fmt --all
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 ```
 
-Git and Path dependencies are supported. DCR will resolve them on build and generate `dcr.lock`.
+---
 
-Incremental build note: object files are rebuilt when source `.c/.cpp` or included header files change.
+<div align="center">
 
+GPL-3.0 — see [LICENSE](LICENSE)<br/>
+Made with ❤️ by [Dexoron](https://github.com/dexoron) and contributors.
 
-## Requirements
-- Rust toolchain (`rustc`, `cargo`) - for building DCR from source
-- C compiler (`clang`, `gcc`, or 'cl'(msvc))
-
-## Releases
-Releases are built automatically via GitHub Actions (`.github/workflows/release.yml`) when a tag matching `v*` is pushed.
-
-## Authors
-
-- **Dexoron (Bezotechestvo Vladimir)** — main@dexoron.su — [github.com/dexoron](https://github.com/dexoron)
-- **Kiedie** — [github.com/peoplemiau1](https://github.com/peoplemiau1)
-
-## License
-
-This project is licensed under the **GNU General Public License v3.0**. See `LICENSE`.
+</div>

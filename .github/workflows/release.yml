@@ -13,6 +13,10 @@ on:
         description: "Build Linux"
         type: boolean
         default: true
+      run_bsd:
+        description: "Build BSD"
+        type: boolean
+        default: true
       run_macos:
         description: "Build macOS"
         type: boolean
@@ -190,6 +194,55 @@ jobs:
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
+# ── BSD ────────────────────────────────────────────────────────────────────
+  build-bsd:
+    if: ${{ github.event_name == 'push' || github.event.inputs.run_bsd == 'true' }}
+    needs: [setup, notes]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-freebsd
+          # При необходимости сюда можно докинуть x86_64-unknown-netbsd
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - name: Download Release Notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: .github
+
+      - name: Install cargo-zigbuild
+        run: |
+          pip install cargo-zigbuild
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo zigbuild --release --target ${{ matrix.target }}
+
+      - name: Prepare Artifact
+        run: |
+          ASSET="dcr-${{ matrix.target }}-${{ needs.setup.outputs.version }}"
+          cp target/${{ matrix.target }}/release/dcr "$ASSET"
+          echo "ASSET_NAME=${ASSET}" >> "$GITHUB_ENV"
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.setup.outputs.tag }}
+          files: ${{ env.ASSET_NAME }}
+          body_path: .github/release-notes.md
+          prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
+
   # ── Windows ────────────────────────────────────────────────────────────────
   build-windows:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_windows == 'true' }}
@@ -241,7 +294,7 @@ jobs:
     if: |
       (github.event_name == 'push' && needs.setup.outputs.prerelease == 'false') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_publish == 'true')
-    needs: [setup, build-linux, build-macos, build-windows]
+    needs: [setup, build-linux, build-macos, build-windows, build-bsd]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -258,7 +311,7 @@ jobs:
     if: |
       (github.event_name == 'push' && needs.setup.outputs.prerelease == 'false') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_brew == 'true')
-    needs: [setup, build-linux, build-macos, build-windows]
+    needs: [setup, build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Download release assets and compute sha256

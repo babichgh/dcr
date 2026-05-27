@@ -262,7 +262,22 @@ pub fn object_path(obj_dir: &Path, source: &str, obj_ext: &str) -> String {
         stripped.to_path_buf()
     };
     let mut out = obj_dir.join(rel);
-    out.set_extension(obj_ext.trim_start_matches('.'));
+    let ext = out
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_string();
+    let obj_ext = obj_ext.trim_start_matches('.');
+    if !ext.is_empty() {
+        let stem = out
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        out.set_file_name(format!("{stem}.{ext}.{obj_ext}"));
+    } else {
+        out.set_extension(obj_ext);
+    }
     out.to_string_lossy().to_string()
 }
 
@@ -379,28 +394,28 @@ mod tests {
     fn object_path_basic() {
         let obj_dir = Path::new("target/debug/obj");
         let result = object_path(obj_dir, "./src/main.c", "o");
-        assert_eq!(result, "target/debug/obj/main.o");
+        assert_eq!(result, "target/debug/obj/main.c.o");
     }
 
     #[test]
     fn object_path_nested() {
         let obj_dir = Path::new("target/debug/obj");
         let result = object_path(obj_dir, "./src/core/utils.c", "o");
-        assert_eq!(result, "target/debug/obj/core/utils.o");
+        assert_eq!(result, "target/debug/obj/core/utils.c.o");
     }
 
     #[test]
     fn object_path_no_prefix() {
         let obj_dir = Path::new("target/debug/obj");
         let result = object_path(obj_dir, "src/main.c", "o");
-        assert_eq!(result, "target/debug/obj/main.o");
+        assert_eq!(result, "target/debug/obj/main.c.o");
     }
 
     #[test]
     fn object_path_msvc_ext() {
         let obj_dir = Path::new("target/debug/obj");
         let result = object_path(obj_dir, "./src/main.c", "obj");
-        assert_eq!(result, "target/debug/obj/main.obj");
+        assert_eq!(result, "target/debug/obj/main.c.obj");
     }
 
     #[test]
