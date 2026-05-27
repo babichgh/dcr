@@ -10,9 +10,17 @@ on:
         description: "Tag to build (e.g. v0.6.7)"
         required: true
       run_linux:
-        description: "Build Linux"
+        description: "Build Linux (.deb, .rpm, .snap, binaries)"
         type: boolean
         default: true
+      run_arch_native:
+        description: "Build Arch Linux Native (.pkg.tar.zst)"
+        type: boolean
+        default: true
+      run_aur:
+        description: "Update AUR packages (dcr & dcr-bin)"
+        type: boolean
+        default: false 
       run_bsd:
         description: "Build BSD"
         type: boolean
@@ -396,7 +404,7 @@ jobs:
  
   # ── Arch Linux Native Package (.pkg.tar.zst) ───────────────────────────────
   build-arch-package:
-    if: ${{ github.event_name == 'push' || github.event.inputs.run_linux == 'true' }}
+    if: ${{ github.event_name == 'push' || github.event.inputs.run_arch_native == 'true' }}
     needs: [setup, notes]
     runs-on: ubuntu-latest
     steps:
@@ -467,7 +475,7 @@ jobs:
 
   # ── Arch User Repository (dcr) ───────────────────────────────────
   publish-aur:
-    if: "!contains(github.ref_name, '-')"
+    if: ${{ (github.event_name == 'push' && needs.setup.outputs.prerelease == 'false') || github.event.inputs.run_aur == 'true' }}
     needs: [setup]
     runs-on: ubuntu-latest
     environment: aur
@@ -579,8 +587,7 @@ jobs:
 
   # ── Arch User Repository (dcr-bin) ────────────────────────────────
   publish-aur-bin:
-    if: "!contains(github.ref_name, '-')"
-    # Ждем сборку линукса, чтобы бинарник гарантированно лежал в релизах
+    if: ${{ (github.event_name == 'push' && needs.setup.outputs.prerelease == 'false') || github.event.inputs.run_aur == 'true' }}
     needs: [setup, build-linux]
     runs-on: ubuntu-latest
     environment: aur
@@ -677,7 +684,6 @@ jobs:
           git commit -m "dcr-bin ${{ needs.setup.outputs.version }}"
           git push
 
-     
   # ── crates.io ──────────────────────────────────────────────────────────────
   publish-crates:
     if: |
