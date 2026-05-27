@@ -69,7 +69,9 @@ pub fn build(args: &[String]) -> i32 {
 
     if flags.target.is_none() {
         let config_path = root.join("dcr.toml");
-        if let Ok(config) = Config::open(config_path.to_str().unwrap()) {
+        if let Ok(config) = Config::open(config_path.to_str().unwrap())
+            && !config.is_workspace_only()
+        {
             let bt = get_build_string_with_profile(&config, "target", "debug");
             if !bt.is_empty() {
                 flags.target = Some(bt);
@@ -100,6 +102,7 @@ pub fn build(args: &[String]) -> i32 {
             flags.target.as_deref(),
             flags.force,
             flags.verbose,
+            flags.workspace.as_deref(),
         )
     }) {
         Ok(()) => 0,
@@ -372,8 +375,13 @@ fn get_build_steps_with_profile(
     get_build_steps(config, &format!("build.{field}"))
 }
 
-fn ensure_target_dirs(items: &[String], profile: &str, target_dir: Option<String>) {
-    if !items.contains(&"target".to_string()) {
+fn ensure_target_dirs(
+    items: &[String],
+    profile: &str,
+    target_dir: Option<String>,
+    skip_local_target: bool,
+) {
+    if !skip_local_target && !items.contains(&"target".to_string()) {
         let _ = fs::create_dir("./target");
     }
     if let Some(dir) = &target_dir {
@@ -414,8 +422,38 @@ fn build_from_root(
     target: Option<&str>,
     force: bool,
     verbose: bool,
+    workspace: Option<&str>,
 ) -> Result<(), String> {
     let config = Config::open("./dcr.toml").map_err(|err| err.to_string())?;
+
+    if config.is_workspace_only() {
+        let ws = parse_workspace(&config, profile, target, root)?
+            .ok_or_else(|| "Workspace root has no members defined".to_string())?;
+        let members: Vec<_> = if let Some(filter_name) = workspace {
+            ws.members
+                .into_iter()
+                .filter(|m| m.name == filter_name)
+                .collect()
+        } else {
+            ws.members
+        };
+        if members.is_empty() {
+            return Err("No matching workspace members to build".to_string());
+        }
+        for member in &members {
+            build_project_at(
+                &member.path,
+                profile,
+                target,
+                &[],
+                force,
+                verbose,
+                Some(root),
+            )?;
+        }
+        return Ok(());
+    }
+
     let project_name = get_config_str(&config, "package.name");
     let project_version = get_config_str(&config, "package.version");
 
@@ -454,20 +492,50 @@ fn build_from_root(
                 )
             );
         }
-        if let Some(workspace) = parse_workspace(&config, profile, build_target.as_deref(), root)? {
-            build_workspace(&workspace, profile, build_target.as_deref(), force, verbose)?;
-            let excludes: Vec<std::path::PathBuf> =
-                workspace.members.iter().map(|m| m.path.clone()).collect();
+        if let Some(ws) = parse_workspace(&config, profile, build_target.as_deref(), root)? {
+            if let Some(filter_name) = workspace {
+                for member in ws.members.iter().filter(|m| m.name == filter_name) {
+                    build_project_at(
+                        &member.path,
+                        profile,
+                        build_target.as_deref(),
+                        &[],
+                        force,
+                        verbose,
+                        Some(root),
+                    )?;
+                }
+            } else {
+                build_workspace(
+                    &ws,
+                    profile,
+                    build_target.as_deref(),
+                    force,
+                    verbose,
+                    Some(root),
+                )?;
+                let excludes: Vec<std::path::PathBuf> =
+                    ws.members.iter().map(|m| m.path.clone()).collect();
+                build_project_at(
+                    root,
+                    profile,
+                    build_target.as_deref(),
+                    &excludes,
+                    force,
+                    verbose,
+                    None,
+                )?;
+            }
+        } else {
             build_project_at(
                 root,
                 profile,
                 build_target.as_deref(),
-                &excludes,
+                &[],
                 force,
                 verbose,
+                None,
             )?;
-        } else {
-            build_project_at(root, profile, build_target.as_deref(), &[], force, verbose)?;
         }
     }
     let elapsed = ((start_time.elapsed().as_secs_f64() * 100.0).trunc()) / 100.0;
@@ -485,9 +553,18 @@ fn build_workspace(
     target: Option<&str>,
     force: bool,
     verbose: bool,
+    workspace_root: Option<&Path>,
 ) -> Result<(), String> {
     for member in &workspace.members {
-        build_project_at(&member.path, profile, target, &[], force, verbose)?;
+        build_project_at(
+            &member.path,
+            profile,
+            target,
+            &[],
+            force,
+            verbose,
+            workspace_root,
+        )?;
     }
     Ok(())
 }
@@ -499,6 +576,7 @@ fn build_project_at(
     exclude_dirs: &[std::path::PathBuf],
     force: bool,
     verbose: bool,
+    workspace_root: Option<&Path>,
 ) -> Result<(), String> {
     with_dir(project_root, || {
         check_interrupted()?;
@@ -506,7 +584,22 @@ fn build_project_at(
         if !items.contains(&"dcr.toml".to_string()) {
             return Err("dcr.toml file not found".to_string());
         }
-        let config = Config::open("./dcr.toml").map_err(|err| err.to_string())?;
+        let mut config = Config::open("./dcr.toml").map_err(|err| err.to_string())?;
+        // Inherit build fields from workspace root if configured
+        if let Some(root) = workspace_root {
+            let has_inherit = config
+                .get("build.inherit")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if has_inherit {
+                let root_path = root.join("dcr.toml");
+                if root_path.is_file() {
+                    let parent_config =
+                        Config::open(&root_path.to_string_lossy()).map_err(|e| e.to_string())?;
+                    config.merge_parent(&parent_config);
+                }
+            }
+        }
         let project_name = get_config_str(&config, "package.name");
         let project_version = get_config_str(&config, "package.version");
         let build_target_config = get_build_string_with_profile(&config, "target", profile);
@@ -598,8 +691,33 @@ fn build_project_at(
         let resolved_linker = resolve_tool("DCR_LD", tc_ld.as_deref());
         let resolved_archiver = resolve_tool("DCR_AR", tc_ar.as_deref());
 
-        let target_dir = build_target.map(|t| format!("target/{t}/{profile}"));
-        ensure_target_dirs(&items, profile, target_dir);
+        let target_dir_binding = match workspace_root {
+            Some(root) => {
+                let target_str = build_target
+                    .map(normalize_target_os)
+                    .filter(|t| !t.is_empty());
+                let rel: PathBuf = match target_str {
+                    Some(ref t) => Path::new("target").join(t).join(profile),
+                    None => {
+                        let default_dir = if cfg!(target_os = "linux") {
+                            let arch = std::env::consts::ARCH;
+                            format!("{arch}-unknown-linux-gnu/{profile}")
+                        } else {
+                            profile.to_string()
+                        };
+                        Path::new("target").join(&default_dir)
+                    }
+                };
+                root.join(&rel).to_string_lossy().to_string()
+            }
+            None => normalize_target(build_target.unwrap_or(""), profile).unwrap_or_default(),
+        };
+        let target_dir = if target_dir_binding.is_empty() {
+            None
+        } else {
+            Some(target_dir_binding.clone())
+        };
+        ensure_target_dirs(&items, profile, target_dir, workspace_root.is_some());
 
         let deps_table = config.get("dependencies").and_then(|v| v.as_table());
         let resolved = resolve_deps(&config, profile, build_target, project_root)?;
@@ -635,7 +753,15 @@ fn build_project_at(
                                 dep_root.display()
                             ));
                         }
-                        build_project_at(&dep_root, profile, build_target, &[], force, verbose)?;
+                        build_project_at(
+                            &dep_root,
+                            profile,
+                            build_target,
+                            &[],
+                            force,
+                            verbose,
+                            None,
+                        )?;
                         print!(
                             "\r{:100}\r       {} {} v{}",
                             "",
@@ -724,7 +850,6 @@ fn build_project_at(
             }
         }
 
-        let target_dir_binding = normalize_target(build_target.unwrap_or(""), profile);
         let version_info = parse_version_info(&project_version);
         let substitute = |s: &str| -> String {
             s.replace("{profile}", profile)
@@ -749,7 +874,11 @@ fn build_project_at(
             standard: &build_standard,
             cxx_standard: &build_cxx_standard,
             target: build_target,
-            target_dir: target_dir_binding.as_deref(),
+            target_dir: if target_dir_binding.is_empty() {
+                None
+            } else {
+                Some(target_dir_binding.as_str())
+            },
             kind: normalize_kind(&build_kind),
             platform: normalize_platform(&build_platform),
             linker: resolved_linker.as_deref(),

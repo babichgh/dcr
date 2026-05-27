@@ -148,6 +148,82 @@ jobs:
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
+  # ── Linux Packages (.deb & .rpm) ───────────────────────────────────────────
+  build-deb-rpm:
+    if: ${{ github.event_name == 'push' || github.event.inputs.run_linux == 'true' }}
+    needs: [setup, notes]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - name: Download Release Notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: .github
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tools
+        run: |
+          cargo install cargo-deb
+          cargo install cargo-generate-rpm
+
+      - name: Build Native Release
+        run: cargo build --release
+
+      - name: Generate .deb Package
+        run: cargo deb --no-build
+
+      - name: Generate .rpm Package
+        run: cargo generate-rpm
+
+      - name: Upload Packages to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.setup.outputs.tag }}
+          files: |
+            target/debian/*.deb
+            target/generate-rpm/*.rpm
+          body_path: .github/release-notes.md
+          prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
+
+  # ── Snapcraft ──────────────────────────────────────────────────────────────
+  build-snap:
+    if: ${{ github.event_name == 'push' || github.event.inputs.run_linux == 'true' }}
+    needs: [setup, notes]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Release Binary
+        run: |
+          cargo build --release
+          # Создаем папки для контекста snapcraft, если внутри yaml завязан относительный путь
+          mkdir -p dist
+          cp target/release/dcr dist/
+
+      - name: Build Snap Package
+        uses: snapcore/action-build@v1
+        id: snapcraft
+        with:
+          path: packages/snap
+
+      - name: Upload Snap to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.setup.outputs.tag }}
+          files: packages/snap/*.snap
+          prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
+
   # ── macOS ──────────────────────────────────────────────────────────────────
   build-macos:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_macos == 'true' }}
@@ -194,7 +270,7 @@ jobs:
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
-# ── BSD ────────────────────────────────────────────────────────────────────
+  # ── BSD Systems ────────────────────────────────────────────────────────────
   build-bsd:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_bsd == 'true' }}
     needs: [setup, notes]
@@ -210,6 +286,7 @@ jobs:
           name: release-notes
           path: .github
 
+      # ── FreeBSD ──
       - name: Install cargo-zigbuild
         run: |
           pip install cargo-zigbuild
@@ -229,7 +306,8 @@ jobs:
           cp target/x86_64-unknown-freebsd/release/dcr "$ASSET"
           echo "FREEBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
 
-          - name: Build in OpenBSD VM
+      # ── OpenBSD ──
+      - name: Build in OpenBSD VM
         uses: vmactions/openbsd-vm@v1
         with:
           usesh: true
@@ -243,6 +321,7 @@ jobs:
           cp target/release/dcr "$ASSET"
           echo "OPENBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
 
+      # ── NetBSD ──
       - name: Build in NetBSD VM
         uses: vmactions/netbsd-vm@v1
         with:
@@ -257,6 +336,7 @@ jobs:
           cp target/release/dcr "$ASSET"
           echo "NETBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
 
+      # ── Assets Upload ──
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -314,6 +394,218 @@ jobs:
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
+  # ── Arch User Repository (dcr) ───────────────────────────────────
+  publish-aur:
+    if: "!contains(github.ref_name, '-')"
+    needs: [setup]
+    runs-on: ubuntu-latest
+    environment: aur
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive checksum
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC_URL="https://github.com/dexoron/dcr/archive/refs/tags/${{ needs.setup.outputs.tag }}.tar.gz"
+          SHA256="$(curl -fsSL "$SRC_URL" | sha256sum | awk '{print $1}')"
+          echo "source_url=$SRC_URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Render AUR metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKGVER='${{ needs.setup.outputs.version }}'
+          SRC_URL='${{ steps.meta.outputs.source_url }}'
+          SHA256='${{ steps.meta.outputs.sha256 }}'
+
+          mkdir -p packages/aur/dcr
+          cat > packages/aur/dcr/PKGBUILD <<PKG
+          pkgname=dcr
+          pkgver=${PKGVER}
+          pkgrel=1
+          pkgdesc="Cargo-like utility to manage C/C++ projects"
+          arch=('x86_64' 'aarch64')
+          url="https://github.com/dexoron/dcr"
+          license=('GPL-3.0-or-later')
+          depends=('gcc-libs')
+          makedepends=('cargo')
+          options=('!lto')
+          optdepends=(
+            'gcc: build C/C++ projects with GCC'
+            'clang: build C/C++ projects with Clang'
+          )
+          source=("\$pkgname-\$pkgver.tar.gz::\$url/archive/refs/tags/v\$pkgver.tar.gz")
+          sha256sums=('${SHA256}')
+
+          build() {
+            cd "\$srcdir/\$pkgname-\$pkgver"
+            export CARGO_PROFILE_RELEASE_LTO=false
+            export RUSTFLAGS="\${RUSTFLAGS:-}"
+            export RUSTFLAGS="\${RUSTFLAGS/-C link-arg=-fuse-ld=lld/}"
+            cargo build --release --locked
+          }
+
+          package() {
+            cd "\$srcdir/\$pkgname-\$pkgver"
+            install -Dm755 "target/release/dcr" "\$pkgdir/usr/bin/dcr"
+            install -Dm644 LICENSE "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
+          }
+          PKG
+
+          cat > packages/aur/dcr/.SRCINFO <<SRC
+          pkgbase = dcr
+            pkgdesc = Cargo-like utility to manage C/C++ projects
+            pkgver = ${PKGVER}
+            pkgrel = 1
+            url = https://github.com/dexoron/dcr
+            arch = x86_64
+            arch = aarch64
+            license = GPL-3.0-or-later
+            makedepends = cargo
+            depends = gcc-libs
+            optdepends = gcc: build C/C++ projects with GCC
+            optdepends = clang: build C/C++ projects with Clang
+            options = !lto
+            source = dcr-${PKGVER}.tar.gz::${SRC_URL}
+            sha256sums = ${SHA256}
+
+          pkgname = dcr
+          SRC
+
+      - name: Push to AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_PACKAGE: dcr
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+
+          export GIT_SSH_COMMAND='ssh -i ~/.ssh/aur -o IdentitiesOnly=yes'
+          git clone "ssh://aur@aur.archlinux.org/${AUR_PACKAGE}.git" aur-repo
+          cp packages/aur/dcr/PKGBUILD aur-repo/PKGBUILD
+          cp packages/aur/dcr/.SRCINFO aur-repo/.SRCINFO
+
+          cd aur-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "No AUR changes"
+            exit 0
+          fi
+
+          git add PKGBUILD .SRCINFO
+          git commit -m "dcr ${{ needs.setup.outputs.version }}"
+          git push
+
+  # ── Arch User Repository (dcr-bin) ────────────────────────────────
+  publish-aur-bin:
+    if: "!contains(github.ref_name, '-')"
+    # Ждем сборку линукса, чтобы бинарник гарантированно лежал в релизах
+    needs: [setup, build-linux]
+    runs-on: ubuntu-latest
+    environment: aur
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive checksum
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN_URL="https://github.com/dexoron/dcr/releases/download/${{ needs.setup.outputs.tag }}/dcr-x86_64-unknown-linux-musl-${{ needs.setup.outputs.version }}"
+          SHA256="$(curl -fsSL "$BIN_URL" | sha256sum | awk '{print $1}')"
+          echo "bin_url=$BIN_URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Render AUR Metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKGVER='${{ needs.setup.outputs.version }}'
+          BIN_URL='${{ steps.meta.outputs.bin_url }}'
+          SHA256='${{ steps.meta.outputs.sha256 }}'
+
+          mkdir -p packages/aur/dcr-bin
+          cat > packages/aur/dcr-bin/PKGBUILD <<PKG
+          pkgname=dcr-bin
+          pkgver=${PKGVER}
+          pkgrel=1
+          pkgdesc="Cargo-like utility to manage C/C++ projects (pre-compiled musl binary)"
+          arch=('x86_64')
+          url="https://github.com/dexoron/dcr"
+          license=('GPL-3.0-or-later')
+          provides=('dcr')
+          conflicts=('dcr')
+          optdepends=(
+            'gcc: build C/C++ projects with GCC'
+            'clang: build C/C++ projects with Clang'
+          )
+          source_x86_64=("dcr-\$pkgver::${BIN_URL}")
+          sha256sums_x86_64=('${SHA256}')
+
+          package() {
+            install -Dm755 "\$srcdir/dcr-\$pkgver" "\$pkgdir/usr/bin/dcr"
+          }
+          PKG
+
+          cat > packages/aur/dcr-bin/.SRCINFO <<SRC
+          pkgbase = dcr-bin
+            pkgdesc = Cargo-like utility to manage C/C++ projects (pre-compiled musl binary)
+            pkgver = ${PKGVER}
+            pkgrel = 1
+            url = https://github.com/dexoron/dcr
+            arch = x86_64
+            license = GPL-3.0-or-later
+            provides = dcr
+            conflicts = dcr
+            optdepends = gcc: build C/C++ projects with GCC
+            optdepends = clang: build C/C++ projects with Clang
+            source_x86_64 = dcr-${PKGVER}::${BIN_URL}
+            sha256sums_x86_64 = ${SHA256}
+
+          pkgname = dcr-bin
+          SRC
+
+      - name: Push to AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_PACKAGE: dcr-bin
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+
+          export GIT_SSH_COMMAND='ssh -i ~/.ssh/aur -o IdentitiesOnly=yes'
+          git clone "ssh://aur@aur.archlinux.org/${AUR_PACKAGE}.git" aur-repo
+          cp packages/aur/dcr-bin/PKGBUILD aur-repo/PKGBUILD
+          cp packages/aur/dcr-bin/.SRCINFO aur-repo/.SRCINFO
+
+          cd aur-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "No AUR changes"
+            exit 0
+          fi
+
+          git add PKGBUILD .SRCINFO
+          git commit -m "dcr-bin ${{ needs.setup.outputs.version }}"
+          git push
+
   # ── crates.io ──────────────────────────────────────────────────────────────
   publish-crates:
     if: |
@@ -321,6 +613,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_publish == 'true')
     needs: [setup, build-linux, build-macos, build-windows, build-bsd]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -329,7 +624,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
 
   # ── Homebrew tap ───────────────────────────────────────────────────────────
   publish-brew:

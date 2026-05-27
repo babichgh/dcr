@@ -24,6 +24,7 @@ use crate::utils::fs::find_project_root;
 use crate::utils::fs::with_dir;
 use crate::utils::log::error;
 use crate::utils::text::{BOLD_GREEN, colored};
+use std::path::Path;
 use std::process::Command;
 
 fn get_run_cmd(
@@ -82,18 +83,82 @@ pub fn run(args: &[String]) -> i32 {
             return 1;
         }
     };
+
+    let flags = match parse_build_run_flags(args) {
+        Ok(v) => v,
+        Err(_) => return 1,
+    };
+
+    // Handle workspace-only root: delegate to workspace member
+    if config.is_workspace_only() {
+        let ws = match crate::core::workspace::parse_workspace(
+            &config,
+            &flags.profile,
+            flags.target.as_deref(),
+            &root,
+        ) {
+            Ok(Some(ws)) => ws,
+            Ok(None) => {
+                error("Workspace root has no members defined");
+                return 1;
+            }
+            Err(e) => {
+                error(&e);
+                return 1;
+            }
+        };
+        let member = match &flags.workspace {
+            Some(name) => ws.members.iter().find(|m| m.name == *name),
+            None => ws.main_member(),
+        };
+        let member = match member {
+            Some(m) => m,
+            None => {
+                if let Some(name) = &flags.workspace {
+                    error(&format!("Workspace member '{name}' not found"));
+                } else {
+                    error("No workspace member to run (set `main = true` on one member)");
+                }
+                return 1;
+            }
+        };
+        // Build and run from the member's directory
+        return match with_dir(&member.path, || {
+            run_project(&member.path, &flags, Some(root.as_path()))
+        }) {
+            Ok(code) => code,
+            Err(e) => {
+                error(&e);
+                1
+            }
+        };
+    }
+
+    match run_project(&root, &flags, None) {
+        Ok(code) => code,
+        Err(e) => {
+            error(&e);
+            1
+        }
+    }
+}
+
+fn run_project(
+    root: &Path,
+    flags: &crate::cli::flags::BuildRunFlags,
+    workspace_root: Option<&Path>,
+) -> Result<i32, String> {
+    let config =
+        Config::open(root.join("dcr.toml").to_str().unwrap()).map_err(|err| err.to_string())?;
+
     let project_name: &str = config
         .get("package.name")
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let mut flags = match parse_build_run_flags(args) {
-        Ok(v) => v,
-        Err(_) => return 1,
-    };
-
     // If no target specified, use default host target for target-specific config
-    if flags.target.is_none() {
+    let mut target = flags.target.clone();
+    if target.is_none() {
         let default_target = if cfg!(target_os = "linux") {
             "x86_64-unknown-linux-gnu"
         } else if cfg!(target_os = "macos") {
@@ -103,7 +168,7 @@ pub fn run(args: &[String]) -> i32 {
         } else {
             "unknown"
         };
-        flags.target = Some(default_target.to_string());
+        target = Some(default_target.to_string());
     }
 
     let build_kind = config
@@ -112,25 +177,30 @@ pub fn run(args: &[String]) -> i32 {
         .or_else(|| config.get("build.kind").and_then(|v| v.as_str()))
         .unwrap_or("");
 
-    let normalized_target_dir = flags
-        .target
-        .as_ref()
-        .and_then(|t| crate::cli::build::normalize_target(t, &flags.profile));
+    let normalized_target_dir = match workspace_root {
+        Some(wr) => target
+            .as_ref()
+            .and_then(|t| crate::cli::build::normalize_target(t, &flags.profile))
+            .map(|rel| wr.join(&rel).to_string_lossy().to_string()),
+        None => target
+            .as_ref()
+            .and_then(|t| crate::cli::build::normalize_target(t, &flags.profile)),
+    };
 
     let version = config
         .get("package.version")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let run_cmd = get_run_cmd(&config, &flags.profile, flags.target.as_deref(), version);
+    let run_cmd = get_run_cmd(&config, &flags.profile, target.as_deref(), version);
 
     let kind = build_kind.trim();
     if run_cmd.is_none()
         && (kind == "staticlib" || kind == "sharedlib" || kind == "efi" || kind == "elf")
     {
-        error("Cannot run library build");
-        return 1;
+        return Err("Cannot run library build".to_string());
     }
-    let build_status = build(args);
+
+    let build_status = build(&args_for_build(flags));
     let bin_path = crate::platform::bin_path(
         &flags.profile,
         project_name,
@@ -140,15 +210,15 @@ pub fn run(args: &[String]) -> i32 {
         if let Some(cmd) = run_cmd {
             println!("\n    {} {}", colored("Running", BOLD_GREEN), cmd);
             println!("--------------------------------");
-            return run_shell(&cmd);
+            return Ok(run_shell(&cmd));
         }
         println!("\n    {} {}", colored("Running", BOLD_GREEN), bin_path);
         println!("--------------------------------");
-        return run_binary(
+        return Ok(run_binary(
             project_name,
             &flags.profile,
             normalized_target_dir.as_deref(),
-        );
+        ));
     }
 
     let fallback_code = if let Some(cmd) = run_cmd {
@@ -161,11 +231,27 @@ pub fn run(args: &[String]) -> i32 {
         )
     };
     if fallback_code != 1 {
-        return fallback_code;
+        return Ok(fallback_code);
     }
 
-    error("Fix errors in the code to run the project");
-    1
+    Err("Fix errors in the code to run the project".to_string())
+}
+
+fn args_for_build(flags: &crate::cli::flags::BuildRunFlags) -> Vec<String> {
+    let mut args = Vec::new();
+    args.push(format!("--{}", flags.profile));
+    if let Some(ref target) = flags.target {
+        args.push("--target".to_string());
+        args.push(target.clone());
+    }
+    if let Some(ref name) = flags.workspace {
+        args.push("--workspace".to_string());
+        args.push(name.clone());
+    }
+    if flags.verbose {
+        args.push("--verbose".to_string());
+    }
+    args
 }
 
 fn run_shell(cmd: &str) -> i32 {

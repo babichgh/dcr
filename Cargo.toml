@@ -1,11 +1,45 @@
 [package]
 name = "dcr"
-version = "0.6.8"
+version = "0.6.9"
 edition = "2024"
 build = "build.rs"
 description = "DCR is a utility for managing C/C++ projects in a Cargo-like style."
 license = "GPL-3.0-or-later"
 repository = "https://github.com/dexoron/dcr"
+
+[package.metadata.binstall]
+pkg-fmt = "bin"
+pkg-url = "{ repo }/releases/download/v{ version }/dcr-{ target }-{ version }{ bin-suffix }"
+
+[package.metadata.deb]
+maintainer = "Dexoron (Bezotechestvo Vladimir) <main@dexoron.su>"
+copyright = "2026, Dexoron"
+license-file = ["LICENSE"]
+extended-description = """\
+Cargo-like utility to manage C/C++ projects.\
+"""
+section = "devel"
+priority = "optional"
+assets = [
+    ["target/release/dcr", "usr/bin/dcr", "755"],
+    # man-page:
+    # ["assets/dcr.1", "usr/share/man/man1/dcr.1", "644"],
+]
+
+[package.metadata.rpm]
+maintainer = "Dexoron (Bezotechestvo Vladimir) <main@dexoron.su>"
+copyright = "2026, Dexoron"
+license-file = ["LICENSE"]
+extended-description = """\
+Cargo-like utility to manage C/C++ projects.\
+"""
+section = "devel"
+priority = "optional"
+assets = [
+    ["target/release/dcr", "usr/bin/dcr", "755"],
+    # man-page:
+    # ["assets/dcr.1", "usr/share/man/man1/dcr.1", "644"],
+]
 
 [dependencies]
 glob = "0.3"

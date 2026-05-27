@@ -26,11 +26,21 @@ pub struct WorkspaceMember {
     pub name: String,
     pub path: PathBuf,
     pub deps: Vec<String>,
+    pub main: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct Workspace {
     pub members: Vec<WorkspaceMember>,
+}
+
+impl Workspace {
+    pub fn main_member(&self) -> Option<&WorkspaceMember> {
+        self.members
+            .iter()
+            .find(|m| m.main)
+            .or_else(|| self.members.first())
+    }
 }
 
 pub fn parse_workspace(
@@ -85,6 +95,7 @@ pub fn parse_workspace(
             name: name.to_string(),
             path,
             deps,
+            main: tbl.get("main").and_then(|v| v.as_bool()).unwrap_or(false),
         });
     }
 

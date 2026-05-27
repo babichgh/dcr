@@ -21,6 +21,7 @@ use crate::utils::log::warn;
 pub struct BuildRunFlags {
     pub profile: String,
     pub target: Option<String>,
+    pub workspace: Option<String>,
     pub force: bool,
     pub clean: bool,
     pub verbose: bool,
@@ -29,6 +30,7 @@ pub struct BuildRunFlags {
 pub fn parse_build_run_flags(args: &[String]) -> Result<BuildRunFlags, i32> {
     let mut profile = PROFILE.to_string();
     let mut target = None;
+    let mut workspace = None;
     let mut force = false;
     let mut clean = false;
     let mut verbose = false;
@@ -50,6 +52,15 @@ pub fn parse_build_run_flags(args: &[String]) -> Result<BuildRunFlags, i32> {
         }
         if candidate == "verbose" {
             verbose = true;
+            continue;
+        }
+        if candidate == "workspace" {
+            if let Some(w) = iter.next() {
+                workspace = Some(w.clone());
+            } else {
+                warn("--workspace requires a value");
+                return Err(1);
+            }
             continue;
         }
         if candidate == "target" {
@@ -76,6 +87,7 @@ pub fn parse_build_run_flags(args: &[String]) -> Result<BuildRunFlags, i32> {
     Ok(BuildRunFlags {
         profile,
         target,
+        workspace,
         force,
         clean,
         verbose,

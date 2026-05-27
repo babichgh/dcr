@@ -77,8 +77,10 @@ pub struct Config {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DcrConfig {
-    pub package: PackageConfig,
-    pub build: BuildConfig,
+    #[serde(default)]
+    pub package: Option<PackageConfig>,
+    #[serde(default)]
+    pub build: Option<BuildConfig>,
     #[serde(default)]
     pub dependencies: BTreeMap<String, DependencyConfig>,
     #[serde(default)]
@@ -123,6 +125,8 @@ pub struct BuildConfig {
     pub clean: Vec<String>,
     #[serde(default)]
     pub src_disable: Option<bool>,
+    #[serde(default)]
+    pub workspace_only: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -201,13 +205,100 @@ impl Config {
     }
 
     #[allow(dead_code)]
-    pub fn package(&self) -> &PackageConfig {
-        &self.typed.package
+    pub fn package(&self) -> Option<&PackageConfig> {
+        self.typed.package.as_ref()
     }
 
     #[allow(dead_code)]
-    pub fn build_config(&self) -> &BuildConfig {
-        &self.typed.build
+    pub fn build_config(&self) -> Option<&BuildConfig> {
+        self.typed.build.as_ref()
+    }
+
+    pub fn is_workspace_only(&self) -> bool {
+        self.typed
+            .build
+            .as_ref()
+            .map(|b| b.workspace_only)
+            .unwrap_or(false)
+            && !self.typed.workspace.is_empty()
+    }
+
+    /// Merge build fields from parent config into self where self has empty/default values.
+    /// Used for workspace member inheritance (build.inherit = true).
+    pub fn merge_parent(&mut self, parent: &Config) {
+        let fields: &[&str] = &[
+            "language",
+            "standard",
+            "cxx_standard",
+            "compiler",
+            "kind",
+            "target",
+            "platform",
+            "cflags",
+            "ldflags",
+            "exclude",
+            "include",
+            "roots",
+            "clean",
+            "src_disable",
+        ];
+        let parent_build = match parent.data.get("build").and_then(|v| v.as_table()) {
+            Some(t) => t.clone(),
+            None => return,
+        };
+
+        let self_build = self
+            .data
+            .get("build")
+            .and_then(|v| v.as_table())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut changes: Vec<(String, toml::Value)> = Vec::new();
+
+        for field in fields {
+            let val = match parent_build.get(*field) {
+                Some(v) => v,
+                None => continue,
+            };
+
+            let self_val = self_build.get(*field);
+            let should_inherit = match val {
+                toml::Value::Array(_) => self_val.is_none(),
+                toml::Value::String(_) => self_val
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true),
+                _ => self_val.is_none(),
+            };
+            if should_inherit {
+                changes.push((field.to_string(), val.clone()));
+            }
+        }
+
+        if changes.is_empty() {
+            return;
+        }
+
+        if !self.data.is_table() {
+            let mut m = Map::new();
+            m.insert("build".to_string(), toml::Value::Table(Map::new()));
+            self.data = toml::Value::Table(m);
+        }
+
+        let tbl = self.data.as_table_mut().unwrap();
+        let build_tbl = tbl
+            .entry("build".to_string())
+            .or_insert_with(|| toml::Value::Table(Map::new()));
+        if let Some(build_tbl) = build_tbl.as_table_mut() {
+            for (key, val) in changes {
+                build_tbl.entry(key).or_insert(val);
+            }
+        }
+
+        if let Ok(typed) = parse_typed_config(&self.data) {
+            self.typed = typed;
+        }
     }
 
     pub fn get(&self, key: &str) -> Option<&Value> {
@@ -229,15 +320,29 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
-        if self.typed.package.name.trim().is_empty() {
+        if self.is_workspace_only() {
+            return self.validate_workspace();
+        }
+
+        let pkg =
+            self.typed.package.as_ref().ok_or_else(|| {
+                ConfigError::Invalid("missing [package] section (required)".into())
+            })?;
+        let build = self
+            .typed
+            .build
+            .as_ref()
+            .ok_or_else(|| ConfigError::Invalid("missing [build] section (required)".into()))?;
+
+        if pkg.name.trim().is_empty() {
             return Err(ConfigError::Invalid("package.name is empty".into()));
         }
-        if self.typed.package.version.trim().is_empty() {
+        if pkg.version.trim().is_empty() {
             return Err(ConfigError::Invalid("package.version is empty".into()));
         }
-        validate_package_name(&self.typed.package.name)?;
+        validate_package_name(&pkg.name)?;
 
-        if let Some(pkg_type) = &self.typed.package.pkg_type {
+        if let Some(pkg_type) = &pkg.pkg_type {
             let pkg_type = pkg_type.trim();
             if !pkg_type.is_empty() && pkg_type != "lib" && pkg_type != "app" && pkg_type != "none"
             {
@@ -247,32 +352,32 @@ impl Config {
             }
         }
 
-        validate_language_config(&self.typed.build.language, "build.language")?;
-        if self.typed.build.standard.trim().is_empty() {
+        validate_language_config(&build.language, "build.language")?;
+        if build.standard.trim().is_empty() {
             return Err(ConfigError::Invalid("build.standard is empty".into()));
         }
-        if self.typed.build.compiler.trim().is_empty() {
+        if build.compiler.trim().is_empty() {
             return Err(ConfigError::Invalid("build.compiler is empty".into()));
         }
-        if let Some(platform) = &self.typed.build.platform
+        if let Some(platform) = &build.platform
             && platform.trim().is_empty()
         {
             return Err(ConfigError::Invalid("build.platform is empty".into()));
         }
         validate_toolchain(self.typed.toolchain.as_ref())?;
-        if let Some(kind) = &self.typed.build.kind {
+        if let Some(kind) = &build.kind {
             let kind = kind.trim();
             if !kind.is_empty() && !VALID_KINDS.contains(&kind) {
                 return Err(ConfigError::Invalid("build.kind is invalid".into()));
             }
         }
-        validate_string_list(&self.typed.build.exclude, "build.exclude")?;
-        validate_string_list(&self.typed.build.include, "build.include")?;
-        validate_string_list(&self.typed.build.roots, "build.roots")?;
-        validate_string_list(&self.typed.build.clean, "build.clean")?;
-        validate_string_list(&self.typed.build.cflags, "build.cflags")?;
-        validate_string_list(&self.typed.build.ldflags, "build.ldflags")?;
-        if let Some(target) = &self.typed.build.target {
+        validate_string_list(&build.exclude, "build.exclude")?;
+        validate_string_list(&build.include, "build.include")?;
+        validate_string_list(&build.roots, "build.roots")?;
+        validate_string_list(&build.clean, "build.clean")?;
+        validate_string_list(&build.cflags, "build.cflags")?;
+        validate_string_list(&build.ldflags, "build.ldflags")?;
+        if let Some(target) = &build.target {
             validate_non_empty_string(target, "build.target")?;
         }
         for profile in ["release", "debug"] {
@@ -824,10 +929,10 @@ mod tests {
             "[package]\nname = \"typed\"\nversion = \"1.2.3\"\ntype = \"lib\"\n\n[build]\nlanguage = [\"c\", \"c++\"]\nstandard = \"c11\"\ncompiler = \"clang\"\nkind = \"staticlib\"\ncflags = [\"-Wall\"]\n\n[dependencies]\nfoo = \"1.0.0\"\n",
         );
         let config = Config::open(&path.to_string_lossy()).unwrap();
-        assert_eq!(config.package().name, "typed");
-        assert_eq!(config.typed().package.version, "1.2.3");
-        assert_eq!(config.build_config().compiler, "clang");
-        assert_eq!(config.build_config().cflags, ["-Wall"]);
+        assert_eq!(config.package().unwrap().name, "typed");
+        assert_eq!(config.typed().package.as_ref().unwrap().version, "1.2.3");
+        assert_eq!(config.build_config().unwrap().compiler, "clang");
+        assert_eq!(config.build_config().unwrap().cflags, ["-Wall"]);
         assert!(config.typed().dependencies.contains_key("foo"));
     }
 
