@@ -216,7 +216,7 @@ jobs:
 
       - name: Prepare Snap Output
         if: matrix.package_type == 'snap'
-        run: mkdir -p dist-packages && cp packages/snap/*.snap dist-packages/
+        run: mkdir -p dist-packages && cp packaging/snap/*.snap dist-packages/
 
       # ── Arch Linux Native Build ──
       - name: Build Arch Package inside Container
