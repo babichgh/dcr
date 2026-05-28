@@ -15,4 +15,4 @@ apps:
 parts:
   dcr:
     plugin: dump
-    source: ../../dist/
+    source: dist/

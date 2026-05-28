@@ -205,7 +205,8 @@ jobs:
         if: matrix.package_type == 'snap'
         run: |
           cargo build --release
-          mkdir -p dist && cp target/release/dcr dist/
+          mkdir -p packaging/snap/dist
+          cp target/release/dcr packaging/snap/dist/
 
       - name: Snapcraft Build Action
         if: matrix.package_type == 'snap'
@@ -371,7 +372,8 @@ jobs:
         with:
           usesh: true
           run: |
-            pkg install -y rust perl gmake
+            export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
+            pkg install -y rust perl5 gmake
             cargo build --release
 
       - name: Prepare FreeBSD Artifact
@@ -388,6 +390,7 @@ jobs:
         with:
           usesh: true
           run: |
+            export PATH="/usr/local/bin:$PATH"
             pkg_add rust perl gmake
             cargo build --release
 
@@ -405,6 +408,7 @@ jobs:
         with:
           usesh: true
           run: |
+            export PATH="/usr/pkg/bin:/usr/pkg/sbin:$PATH"
             pkgin -y install rust perl gmake
             cargo build --release
 

@@ -29,8 +29,9 @@ description = """
 Cargo-like utility to manage C/C++ projects.
 """
 
-[package.metadata.generate-rpm.files]
-"/usr/bin/dcr" = { source = "target/release/dcr", mode = "755" }
+assets = [
+    { source = "target/release/dcr", dest = "/usr/bin/dcr", mode = "755" }
+]
 
 [dependencies]
 glob = "0.3"
