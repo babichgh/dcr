@@ -67,6 +67,8 @@ jobs:
               ln -sf dexoron.db.tar.gz dexoron.db && \
               ln -sf dexoron.files.tar.gz dexoron.files
             '
+      - name: Fix GPG permissions after Docker
+        run: sudo chown -R runner:runner ~/.gnupg
 
       - name: Update Debian APT Repository Index
         run: |
