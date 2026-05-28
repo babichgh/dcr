@@ -13,7 +13,6 @@ permissions:
 jobs:
   update-packages-index:
     runs-on: ubuntu-latest
-    # Запускаем только если это ручной вызов ИЛИ если родительский релиз завершился успешно
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -24,8 +23,9 @@ jobs:
           token: ${{ secrets.PACKAGES_REPO_TOKEN }}
           path: 'central-packages'
 
-      - name: Download built package artifact
-        # Этот шаг отработает только при автоматическом набеге из главного релиза
+      # --- СКАЧИВАНИЕ АРТЕФАКТОВ ИЗ РЕЛИЗА ---
+
+      - name: Download Arch package artifact
         if: ${{ github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v4
         with:
@@ -33,9 +33,31 @@ jobs:
           path: central-packages/archlinux/x86_64/
           github-token: ${{ secrets.PACKAGES_REPO_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
+        continue-on-error: true
+
+      - name: Download Debian package artifact
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: debian-package
+          path: central-packages/debian/
+          github-token: ${{ secrets.PACKAGES_REPO_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+        continue-on-error: true
+
+      - name: Download RPM package artifact
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-package
+          path: central-packages/rpm/x86_64/
+          github-token: ${{ secrets.PACKAGES_REPO_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+        continue-on-error: true
+
+      # --- ИНДЕКСАЦИЯ REPO ---
 
       - name: Update Pacman Database (Inside Arch Container)
-        # Запускаем изолированный контейнер Арча только ради одной команды repo-add
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/central-packages:/packages \
@@ -43,21 +65,51 @@ jobs:
             bash -c '
               cd /packages/archlinux/x86_64 && \
               rm -f dexoron.db dexoron.files && \
-              
-              # Включаем nullglob, чтобы пустая маска *.pkg.tar.zst не превращалась в одноименную строку
               shopt -s nullglob
               packages=(*.pkg.tar.zst)
-              
-              # Проверяем, есть ли бинарные пакеты в папке
               if [ ${#packages[@]} -gt 0 ]; then
-                echo "Found ${#packages[@]} packages. Updating database..."
+                echo "Found ${#packages[@]} Arch packages. Updating database..."
                 repo-add dexoron.db.tar.gz "${packages[@]}" && \
                 ln -sf dexoron.db.tar.gz dexoron.db && \
                 ln -sf dexoron.files.tar.gz dexoron.files
               else
-                echo "No .pkg.tar.zst files found in directory. Skipping database update."
+                echo "No .pkg.tar.zst files found. Skipping."
               fi
             '
+
+      - name: Update Debian APT Repository Index
+        run: |
+          sudo apt-get update && sudo apt-get install -y dpkg-dev
+          cd central-packages/debian
+          
+          shopt -s nullglob
+          deb_packages=(*.deb)
+          
+          if [ ${#deb_packages[@]} -gt 0 ]; then
+            echo "Found ${#deb_packages[@]} Debian packages. Generating Packages.gz..."
+            # Генерируем индекс для плоского (flat) репозитория
+            dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+          else
+            echo "No .deb files found. Skipping Debian index update."
+          fi
+
+      - name: Update Fedora DNF Repository Index
+        run: |
+          sudo apt-get update && sudo apt-get install -y createrepo-c
+          cd central-packages/rpm/x86_64
+          
+          shopt -s nullglob
+          rpm_packages=(*.rpm)
+          
+          if [ ${#rpm_packages[@]} -gt 0 ]; then
+            echo "Found ${#rpm_packages[@]} RPM packages. Generating repodata..."
+            # Пересоздаем метаданные для dnf
+            createrepo_c .
+          else
+            echo "No .rpm files found. Skipping Fedora index update."
+          fi
+
+      # --- ПУШ ИЗМЕНЕНИЙ ---
 
       - name: Push to dexoron/packages
         run: |
@@ -65,11 +117,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Проверяем, изменилось ли что-то, чтобы не плодить пустые коммиты
+          # Проверяем изменения во всех трех целевых папках
           if [ -n "$(git status --porcelain)" ]; then
-            git add archlinux/
-            git commit -m "chore(arch): update repository db with new packages"
+            git add archlinux/ debian/ rpm/
+            git commit -m "chore: update repositories index (arch, debian, rpm)"
             git push
           else
-            echo "No changes detected in repository database."
+            echo "No changes detected in repository databases."
           fi

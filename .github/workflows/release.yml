@@ -10,11 +10,11 @@ on:
         description: "Tag to build (e.g. v0.6.7)"
         required: true
       run_linux:
-        description: "Build Linux (.deb, .rpm, .snap, binaries)"
+        description: "Build Linux"
         type: boolean
         default: true
-      run_arch_native:
-        description: "Build Arch Linux Native (.pkg.tar.zst)"
+      run_linux_packages:
+        description: "Build Linux Packages (.deb, .rpm, .snap, .pkg.tar.zst)"
         type: boolean
         default: true
       run_aur:
@@ -100,7 +100,7 @@ jobs:
           name: release-notes
           path: .github/release-notes.md
 
-  # ── Linux ──────────────────────────────────────────────────────────────────
+  # ── Linux Binaries Matrix ──────────────────────────────────────────────────
   build-linux:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_linux == 'true' }}
     needs: [setup, notes]
@@ -156,83 +156,149 @@ jobs:
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
-  # ── Linux Packages (.deb & .rpm) ───────────────────────────────────────────
-  build-deb-rpm:
-    if: ${{ github.event_name == 'push' || github.event.inputs.run_linux == 'true' }}
+  # ── Linux Packages Matrix (.deb, .rpm, .pkg.tar.zst, .snap) ────────────────
+  build-linux-packages:
+    if: ${{ github.event_name == 'push' || github.event.inputs.run_linux_packages == 'true' }}
     needs: [setup, notes]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package_type: deb
+            artifact_name: debian-package
+          - package_type: rpm
+            artifact_name: rpm-package
+          - package_type: arch
+            artifact_name: arch-package
+          - package_type: snap
+            artifact_name: snap-package
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.setup.outputs.tag }}
 
+      - name: Setup Rust (For non-container builds)
+        if: matrix.package_type != 'arch'
+        uses: dtolnay/rust-toolchain@stable
+
+      # ── DEB Build ──
+      - name: Build Debian Package
+        if: matrix.package_type == 'deb'
+        run: |
+          cargo install cargo-deb
+          cargo build --release
+          cargo deb --no-build
+          mkdir -p dist-packages && cp target/debian/*.deb dist-packages/
+
+      # ── RPM Build ──
+      - name: Build RPM Package
+        if: matrix.package_type == 'rpm'
+        run: |
+          cargo install cargo-generate-rpm
+          cargo build --release
+          cargo generate-rpm
+          mkdir -p dist-packages && cp target/generate-rpm/*.rpm dist-packages/
+
+      # ── Snap Build ──
+      - name: Build Snap Package
+        if: matrix.package_type == 'snap'
+        run: |
+          cargo build --release
+          mkdir -p dist && cp target/release/dcr dist/
+
+      - name: Snapcraft Build Action
+        if: matrix.package_type == 'snap'
+        uses: snapcore/action-build@v1
+        with:
+          path: packages/snap
+
+      - name: Prepare Snap Output
+        if: matrix.package_type == 'snap'
+        run: mkdir -p dist-packages && cp packages/snap/*.snap dist-packages/
+
+      # ── Arch Linux Native Build ──
+      - name: Build Arch Package inside Container
+        if: matrix.package_type == 'arch'
+        run: |
+          PKGVER='${{ needs.setup.outputs.version }}'
+          TAG='${{ needs.setup.outputs.tag }}'
+          SRC_URL="https://github.com/dexoron/dcr/archive/refs/tags/${TAG}.tar.gz"
+          SHA256="$(curl -fsSL "$SRC_URL" | sha256sum | awk '{print $1}')"
+          mkdir -p arch-build
+          cat > arch-build/PKGBUILD <<PKG
+          pkgname=dcr
+          pkgver=${PKGVER}
+          pkgrel=1
+          pkgdesc="Cargo-like utility to manage C/C++ projects"
+          arch=('x86_64')
+          url="https://github.com/dexoron/dcr"
+          license=('GPL-3.0-or-later')
+          depends=('gcc-libs')
+          makedepends=('cargo')
+          options=('!lto')
+          source=("\$pkgname-\$pkgver.tar.gz::\$url/archive/refs/tags/v\$pkgver.tar.gz")
+          sha256sums=('${SHA256}')
+          build() {
+            cd "\$srcdir/\$pkgname-\$pkgver"
+            cargo build --release --locked
+          }
+          package() {
+            cd "\$srcdir/\$pkgname-\$pkgver"
+            install -Dm755 "target/release/dcr" "\$pkgdir/usr/bin/dcr"
+            install -Dm644 LICENSE "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
+          }
+          PKG
+          docker run --rm \
+            -v ${{ github.workspace }}/arch-build:/build \
+            archlinux:latest \
+            bash -c "
+              pacman -Syu --noconfirm base-devel cargo gcc-libs git && \
+              useradd -m builduser && \
+              echo 'builduser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers && \
+              chown -R builduser:builduser /build && \
+              cd /build && \
+              su builduser -c 'makepkg -s --noconfirm'
+            "
+          mkdir -p dist-packages && cp arch-build/*.pkg.tar.zst dist-packages/
+
+      # ── Upload Artifacts ──
+      - name: Upload Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist-packages/*
+          if-no-files-found: ignore
+
+  # ── Publish Packages to Release (Out of Matrix) ────────────────────────────
+  publish-dexoron-packages:
+    needs: [setup, notes, build-linux-packages]
+    runs-on: ubuntu-latest
+    steps:
       - name: Download Release Notes
         uses: actions/download-artifact@v4
         with:
           name: release-notes
           path: .github
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Download Built Packages
+        uses: actions/download-artifact@v4
+        with:
+          path: collected-packages
 
-      - name: Install Tools
-        run: |
-          cargo install cargo-deb
-          cargo install cargo-generate-rpm
-
-      - name: Build Native Release
-        run: cargo build --release
-
-      - name: Generate .deb Package
-        run: cargo deb --no-build
-
-      - name: Generate .rpm Package
-        run: cargo generate-rpm
-
-      - name: Upload Packages to Release
+      - name: Upload Everything to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.setup.outputs.tag }}
           files: |
-            target/debian/*.deb
-            target/generate-rpm/*.rpm
+            collected-packages/debian-package/*
+            collected-packages/rpm-package/*
+            collected-packages/arch-package/*
+            collected-packages/snap-package/*
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
-  # ── Snapcraft ──────────────────────────────────────────────────────────────
-  build-snap:
-    if: ${{ github.event_name == 'push' || github.event.inputs.run_linux == 'true' }}
-    needs: [setup, notes]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.setup.outputs.tag }}
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Build Release Binary
-        run: |
-          cargo build --release
-          # Создаем папки для контекста snapcraft, если внутри yaml завязан относительный путь
-          mkdir -p dist
-          cp target/release/dcr dist/
-
-      - name: Build Snap Package
-        uses: snapcore/action-build@v1
-        id: snapcraft
-        with:
-          path: packages/snap
-
-      - name: Upload Snap to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.setup.outputs.tag }}
-          files: packages/snap/*.snap
-          prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
-
-  # ── macOS ──────────────────────────────────────────────────────────────────
+  # ── macOS Matrix ───────────────────────────────────────────────────────────
   build-macos:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_macos == 'true' }}
     needs: [setup, notes]
@@ -278,11 +344,15 @@ jobs:
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
-  # ── BSD Systems ────────────────────────────────────────────────────────────
+  # ── BSD Systems Matrix ─────────────────────────────────────────────────────
   build-bsd:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_bsd == 'true' }}
     needs: [setup, notes]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        system: [freebsd, openbsd, netbsd]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -294,28 +364,26 @@ jobs:
           name: release-notes
           path: .github
 
-      # ── FreeBSD ──
-      - name: Install cargo-zigbuild
-        run: |
-          pip install cargo-zigbuild
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Setup Rust (FreeBSD)
-        uses: dtolnay/rust-toolchain@stable
+      # --- FREEBSD ---
+      - name: Build in FreeBSD VM
+        if: matrix.system == 'freebsd'
+        uses: vmactions/freebsd-vm@v1
         with:
-          targets: x86_64-unknown-freebsd
-
-      - name: Build FreeBSD
-        run: cargo zigbuild --release --target x86_64-unknown-freebsd
+          usesh: true
+          run: |
+            pkg install -y rust
+            cargo build --release
 
       - name: Prepare FreeBSD Artifact
+        if: matrix.system == 'freebsd'
         run: |
           ASSET="dcr-x86_64-unknown-freebsd-${{ needs.setup.outputs.version }}"
-          cp target/x86_64-unknown-freebsd/release/dcr "$ASSET"
-          echo "FREEBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
+          cp target/release/dcr "$ASSET"
+          echo "BSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
 
-      # ── OpenBSD ──
+      # --- OPENBSD ---
       - name: Build in OpenBSD VM
+        if: matrix.system == 'openbsd'
         uses: vmactions/openbsd-vm@v1
         with:
           usesh: true
@@ -324,13 +392,15 @@ jobs:
             cargo build --release
 
       - name: Prepare OpenBSD Artifact
+        if: matrix.system == 'openbsd'
         run: |
           ASSET="dcr-x86_64-unknown-openbsd-${{ needs.setup.outputs.version }}"
           cp target/release/dcr "$ASSET"
-          echo "OPENBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
+          echo "BSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
 
-      # ── NetBSD ──
+      # --- NETBSD ---
       - name: Build in NetBSD VM
+        if: matrix.system == 'netbsd'
         uses: vmactions/netbsd-vm@v1
         with:
           usesh: true
@@ -339,24 +409,22 @@ jobs:
             cargo build --release
 
       - name: Prepare NetBSD Artifact
+        if: matrix.system == 'netbsd'
         run: |
           ASSET="dcr-x86_64-unknown-netbsd-${{ needs.setup.outputs.version }}"
           cp target/release/dcr "$ASSET"
-          echo "NETBSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
+          echo "BSD_ASSET=${ASSET}" >> "$GITHUB_ENV"
 
-      # ── Assets Upload ──
-      - name: Upload Release Assets
+      # --- UPLOAD TARGET ---
+      - name: Upload BSD Asset to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.setup.outputs.tag }}
-          files: |
-            ${{ env.FREEBSD_ASSET }}
-            ${{ env.OPENBSD_ASSET }}
-            ${{ env.NETBSD_ASSET }}
+          files: ${{ env.BSD_ASSET }}
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
 
-  # ── Windows ────────────────────────────────────────────────────────────────
+  # ── Windows Matrix ─────────────────────────────────────────────────────────
   build-windows:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_windows == 'true' }}
     needs: [setup, notes]
@@ -402,77 +470,6 @@ jobs:
           body_path: .github/release-notes.md
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
  
-  # ── Arch Linux Native Package (.pkg.tar.zst) ───────────────────────────────
-  build-arch-package:
-    if: ${{ github.event_name == 'push' || github.event.inputs.run_arch_native == 'true' }}
-    needs: [setup, notes]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.setup.outputs.tag }}
-
-      - name: Build .pkg.tar.zst inside Arch Container
-        run: |
-          PKGVER='${{ needs.setup.outputs.version }}'
-          TAG='${{ needs.setup.outputs.tag }}'
-          SRC_URL="https://github.com/dexoron/dcr/archive/refs/tags/${TAG}.tar.gz"
-          SHA256="$(curl -fsSL "$SRC_URL" | sha256sum | awk '{print $1}')"
-          
-          mkdir -p arch-build
-          
-          cat > arch-build/PKGBUILD <<PKG
-          pkgname=dcr
-          pkgver=${PKGVER}
-          pkgrel=1
-          pkgdesc="Cargo-like utility to manage C/C++ projects"
-          arch=('x86_64')
-          url="https://github.com/dexoron/dcr"
-          license=('GPL-3.0-or-later')
-          depends=('gcc-libs')
-          makedepends=('cargo')
-          options=('!lto')
-          source=("\$pkgname-\$pkgver.tar.gz::\$url/archive/refs/tags/v\$pkgver.tar.gz")
-          sha256sums=('${SHA256}')
-
-          build() {
-            cd "\$srcdir/\$pkgname-\$pkgver"
-            cargo build --release --locked
-          }
-
-          package() {
-            cd "\$srcdir/\$pkgname-\$pkgver"
-            install -Dm755 "target/release/dcr" "\$pkgdir/usr/bin/dcr"
-            install -Dm644 LICENSE "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
-          }
-          PKG
-
-          docker run --rm \
-            -v ${{ github.workspace }}/arch-build:/build \
-            archlinux:latest \
-            bash -c "
-              pacman -Syu --noconfirm base-devel cargo gcc-libs git && \
-              useradd -m builduser && \
-              echo 'builduser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers && \
-              chown -R builduser:builduser /build && \
-              cd /build && \
-              su builduser -c 'makepkg -s --noconfirm'
-            "
-
-      - name: Upload Arch Package Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: arch-package
-          path: arch-build/*.pkg.tar.zst
-
-      - name: Upload Package to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.setup.outputs.tag }}
-          files: arch-build/*.pkg.tar.zst
-          prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
-
   # ── Arch User Repository (dcr) ───────────────────────────────────
   publish-aur:
     if: ${{ (github.event_name == 'push' && needs.setup.outputs.prerelease == 'false') || github.event.inputs.run_aur == 'true' }}

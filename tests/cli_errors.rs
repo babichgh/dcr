@@ -280,8 +280,11 @@ fn build_release_profile() {
     let out = run_dcr_env(&["build", "--release"], &dir, &envs);
     assert!(out.status.success(), "release build should succeed");
     assert!(
-        dir.join("target").join("release").is_dir(),
-        "target/release should exist"
+        dir.join("target")
+            .join("x86_64-unknown-linux-gnu")
+            .join("release")
+            .is_dir(),
+        "target/x86_64-unknown-linux-gnu/release should exist"
     );
 }
 

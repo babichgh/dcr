@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.6.9] - 2026-05-28
+
+Added:
+
+- **Dexoron Packages Index** — new standalone CI workflow (`.github/workflows/dexoron-packages-index.yml`)
+  that automatically updates the `dexoron/packages` repository indexes after a release.
+  Supports Arch Linux (`repo-add`), Debian (`dpkg-scanpackages`), and Fedora (`createrepo_c`).
+  Triggered by `workflow_dispatch` or `workflow_run` on the Release workflow.
+
+- **Arch Linux native package** (`.pkg.tar.zst`) build inside the release workflow —
+  builds from source in an `archlinux:latest` Docker container using a dynamically
+  generated PKGBUILD.
+
+- **AUR publish support** — new `run_aur` workflow dispatch input and `publish-aur` /
+  `publish-aur-bin` jobs that push PKGBUILD / `.SRCINFO` to `aur.archlinux.org`.
+
+Changed:
+
+- **Release workflow refactored** — Linux packages (deb, rpm, snap, arch) and BSD
+  builds now use `strategy.matrix` instead of separate jobs. A new
+  `publish-dexoron-packages` job collects all package artifacts and uploads them
+  to the GitHub Release in one step. Removed standalone `build-arch-package`,
+  `build-snap`, `build-deb-rpm` jobs. The old `run_arch_native` input is now
+  `run_linux_packages`.
+
+- **Dexoron Packages Index workflow** extracted from `release.yml` into its own
+  file with support for Debian and RPM repository indexes in addition to Arch.
+
+- **git2 vendoring** — enabled `vendored-libgit2` and `vendored-openssl` features
+  for reproducible CI builds without system libraries.
+
+- **cargo-generate-rpm metadata** — updated to the current `package.metadata.rpm`
+  format (uses `files` table instead of `assets` array).
+
+Fixed:
+
+- **`--target=<triple>` no longer passed to GCC** — the flag is now only injected into
+  cflags when the resolved compiler name contains `"clang"`. GCC rejects this flag
+  with `unrecognized command-line option`.
+
+- **Workspace clean test** — removed assertions for member-local `target/`
+  directories. Workspace members share the root `target/` directory, so their
+  individual `src/<name>/target/` is never created.
+
+- **Release build test path** — corrected expected directory from `target/release`
+  to `target/x86_64-unknown-linux-gnu/release`.
+
 ## [0.6.8] - 2026-05-27
 
 Added:

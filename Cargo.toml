@@ -14,32 +14,23 @@ pkg-url = "{ repo }/releases/download/v{ version }/dcr-{ target }-{ version }{ b
 [package.metadata.deb]
 maintainer = "Dexoron (Bezotechestvo Vladimir) <main@dexoron.su>"
 copyright = "2026, Dexoron"
-license-file = ["LICENSE"]
-extended-description = """\
-Cargo-like utility to manage C/C++ projects.\
+extended-description = """
+Cargo-like utility to manage C/C++ projects.
 """
 section = "devel"
 priority = "optional"
 assets = [
     ["target/release/dcr", "usr/bin/dcr", "755"],
-    # man-page:
-    # ["assets/dcr.1", "usr/share/man/man1/dcr.1", "644"],
 ]
 
 [package.metadata.rpm]
-maintainer = "Dexoron (Bezotechestvo Vladimir) <main@dexoron.su>"
-copyright = "2026, Dexoron"
-license-file = ["LICENSE"]
-extended-description = """\
-Cargo-like utility to manage C/C++ projects.\
+summary = "Cargo-like utility to manage C/C++ projects"
+description = """
+Cargo-like utility to manage C/C++ projects.
 """
-section = "devel"
-priority = "optional"
-assets = [
-    ["target/release/dcr", "usr/bin/dcr", "755"],
-    # man-page:
-    # ["assets/dcr.1", "usr/share/man/man1/dcr.1", "644"],
-]
+
+[package.metadata.rpm.files]
+"/usr/bin/dcr" = { source = "target/release/dcr", mode = "755" }
 
 [dependencies]
 glob = "0.3"
@@ -48,9 +39,9 @@ serde = { version = "1", features = ["derive"] }
 self-replace = "1"
 sha2 = "0.10"
 toml = "1.0.3"
-git2 = "0.20.4"
 serde_json = "1"
 ctrlc = "3"
+git2 = { version = "0.20.4", features = ["vendored-libgit2", "vendored-openssl"] }
 
 [target.'cfg(not(windows))'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }

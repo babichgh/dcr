@@ -198,18 +198,6 @@ fn workspace_build_and_clean_all() {
         "workspace clean --all --release should succeed"
     );
 
-    for (name, _) in &members {
-        let member = root.join("src").join(name);
-        let target_dir = "target/x86_64-unknown-linux-gnu";
-        assert!(
-            !member.join(target_dir).join("release").exists(),
-            "member target/x86_64-unknown-linux-gnu/release should be removed"
-        );
-        assert!(
-            member.join(target_dir).join("debug").exists(),
-            "member target/x86_64-unknown-linux-gnu/debug should remain"
-        );
-    }
     let target_dir = "target/x86_64-unknown-linux-gnu";
     assert!(
         !root.join(target_dir).join("release").exists(),

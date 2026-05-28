@@ -641,17 +641,6 @@ fn build_project_at(
             .or_else(|| get_config_opt(&config, "toolchain.rcc"));
         let mut build_cflags =
             get_list_with_profile_and_target(&config, "cflags", profile, build_target)?;
-        if let Some(t) = build_target
-            && !t.trim().is_empty()
-        {
-            let target_flag = format!("--target={}", t.trim());
-            if !build_cflags
-                .iter()
-                .any(|f| f == &target_flag || f.starts_with("--target="))
-            {
-                build_cflags.insert(0, target_flag);
-            }
-        }
         let mut build_ldflags =
             get_list_with_profile_and_target(&config, "ldflags", profile, build_target)?;
         let build_ldscript =
@@ -688,6 +677,18 @@ fn build_project_at(
             tc_cxx.as_deref(),
             tc_as.as_deref(),
         );
+        if let Some(t) = build_target
+            && !t.trim().is_empty()
+            && resolved_compiler.to_lowercase().contains("clang")
+        {
+            let target_flag = format!("--target={}", t.trim());
+            if !build_cflags
+                .iter()
+                .any(|f| f == &target_flag || f.starts_with("--target="))
+            {
+                build_cflags.insert(0, target_flag);
+            }
+        }
         let resolved_linker = resolve_tool("DCR_LD", tc_ld.as_deref());
         let resolved_archiver = resolve_tool("DCR_AR", tc_ar.as_deref());
 
